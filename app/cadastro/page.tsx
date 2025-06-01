@@ -33,6 +33,7 @@ export default function CadastroPage() {
         email: email,
         senha: password, // armazenar senha em texto plano não é ideal em produção!
         assinatura_ativa: false,
+        plano: "teste", // <-- CAMPO ADICIONADO
         data_criacao: serverTimestamp(),
       })
 

@@ -20,7 +20,8 @@ const serviceAccount = {
   universe_domain: "googleapis.com",
 };
 
-const handler = NextAuth({
+// 🔧 authOptions separado e exportado
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -62,55 +63,55 @@ const handler = NextAuth({
       },
     }),
   ],
+
   adapter: FirestoreAdapter({
     credential: cert(serviceAccount as any),
   }),
+
   session: {
     strategy: "jwt",
   },
+
   pages: {
     signIn: "/login",
   },
+
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
-        console.log("Callback signIn (Google) - Verificando permissão de acesso...");
-
         const userEmail = profile?.email;
-        if (!userEmail) {
-          console.error("Callback signIn - Email não disponível.");
-          return false;
-        }
+        if (!userEmail) return false;
 
         try {
           const docRef = doc(db, "nutricionistas", userEmail);
           const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            console.log(`Callback signIn - ${userEmail} autorizado.`);
-            return true;
-          } else {
-            console.warn(`Callback signIn - ${userEmail} NÃO está na coleção de nutricionistas.`);
-            return false;
-          }
+          return docSnap.exists();
         } catch (err) {
           console.error("Callback signIn - Erro ao acessar Firestore:", err);
           return false;
         }
       }
-
-      return true; // permite login com credentials ou outros provedores
+      return true;
     },
 
     async jwt({ token, user }) {
-      if (user?.id) token.uid = user.id;
+      if (user) {
+        token.uid = user.id;
+        token.email = user.email;
+      }
       return token;
     },
 
     async session({ session, token }) {
-      if (token) session.user.uid = token.uid;
+      if (token) {
+        session.user.uid = token.uid;
+        session.user.email = token.email as string;
+      }
       return session;
     },
   },
-});
+};
 
+// 🔁 handler separado
+const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };

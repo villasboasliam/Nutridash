@@ -31,18 +31,19 @@ export default function NovoPacientePage() {
     setIsLoading(true); // Inicia o loading
 
     try {
-      const response = await fetch('/api/createPatient', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nome,
-          email,
-          telefone,
-          nutricionistaId: session.user.email, // Envie o email do nutricionista como ID
-        }),
-      });
+      const response = await fetch('/api/enviar-convite-paciente', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    nome,
+    email,
+    telefone,
+    nutricionistaId: session.user.email,
+  }),
+});
+
 
       const data = await response.json();
 

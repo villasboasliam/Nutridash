@@ -1,11 +1,12 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,33 +22,71 @@ export default function UpdatePasswordPage() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  const { data: session } = useSession()
   const router = useRouter()
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (newPassword !== confirmPassword) {
+    if (newPassword.length < 6) {
       toast({
-        title: "Erro",
-        description: "As senhas não coincidem. Por favor, verifique e tente novamente.",
+        title: "Senha muito curta",
+        description: "A nova senha deve ter pelo menos 6 caracteres.",
         variant: "destructive",
       })
       return
     }
 
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Senhas não coincidem",
+        description: "A nova senha e a confirmação estão diferentes.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!session?.user?.email) return
+
     setIsLoading(true)
 
-    // Simulação de atualização de senha
-    setTimeout(() => {
-      setIsLoading(false)
+    try {
+      const ref = doc(db, "nutricionistas", session.user.email)
+      const snap = await getDoc(ref)
+
+      if (!snap.exists()) throw new Error("Usuário não encontrado no banco de dados.")
+
+      const dados = snap.data()
+
+      if (dados.senha !== currentPassword) {
+        toast({
+          title: "Senha atual incorreta",
+          description: "A senha atual digitada não confere com nosso registro.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+
+      await updateDoc(ref, { senha: newPassword })
+
       toast({
         title: "Senha atualizada com sucesso!",
-        description: "Sua senha foi atualizada com segurança.",
-        variant: "default",
+        description: "Sua nova senha foi salva com segurança.",
       })
+
       router.push("/perfil")
-    }, 1500)
+    } catch (err: any) {
+      toast({
+        title: "Erro ao atualizar senha",
+        description: err.message || "Tente novamente mais tarde.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -60,9 +99,7 @@ export default function UpdatePasswordPage() {
           </Link>
         </Button>
         <div className="w-full flex-1">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Atualizar Senha</h2>
-          </div>
+          <h2 className="text-lg font-medium">Atualizar Senha</h2>
         </div>
       </header>
 
@@ -71,7 +108,7 @@ export default function UpdatePasswordPage() {
           <Card>
             <CardHeader>
               <CardTitle>Atualizar Senha</CardTitle>
-              <CardDescription>Crie uma senha forte e única para proteger sua conta.</CardDescription>
+              <CardDescription>Use uma senha forte e fácil de lembrar.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -91,10 +128,10 @@ export default function UpdatePasswordPage() {
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     >
                       {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showCurrentPassword ? "Esconder senha" : "Mostrar senha"}</span>
                     </button>
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="new-password">Nova senha</Label>
                   <div className="relative">
@@ -111,13 +148,10 @@ export default function UpdatePasswordPage() {
                       onClick={() => setShowNewPassword(!showNewPassword)}
                     >
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showNewPassword ? "Esconder senha" : "Mostrar senha"}</span>
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    A senha deve ter pelo menos 8 caracteres e incluir letras, números e símbolos.
-                  </p>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirmar nova senha</Label>
                   <div className="relative">
@@ -134,10 +168,10 @@ export default function UpdatePasswordPage() {
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showConfirmPassword ? "Esconder senha" : "Mostrar senha"}</span>
                     </button>
                   </div>
                 </div>
+
                 <Button
                   type="submit"
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore"
+import { collection, getDocs, getDoc, doc, query, where, orderBy } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 import { Calendar, FileText, Home, LineChart, Menu, Plus, Users, Video } from "lucide-react"
@@ -67,45 +67,80 @@ function Dashboard({ session }: { session: any }) {
 
   useEffect(() => {
     const fetchMetrics = async () => {
-      if (!session?.user?.email) return
-
-      const nutricionistaPacientesRef = collection(db, "nutricionistas", session.user.email, "pacientes");
+      if (!session?.user?.email) return;
+      const nutricionistaEmail = session.user.email;
+      const nutricionistaPacientesRef = collection(db, "nutricionistas", nutricionistaEmail, "pacientes");
       const pacientesSnap = await getDocs(nutricionistaPacientesRef);
-      const pacientes = pacientesSnap.docs.map(doc => doc.data());
+      const pacientes = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       const totalPacientes = pacientes.length;
       const pacientesAtivos = pacientes.filter(p => p.status === "Ativo").length;
       const pacientesAtivosSemanaAnterior = Math.max(0, pacientesAtivos - 1);
-      const dietasEnviadas = pacientes.filter(p => p.dieta_pdf_url).length;
-      const dietasSemanaAnterior = Math.max(0, dietasEnviadas - 1);
+
+      let dietasEnviadas = 0;
+      let dietasSemanaAnterior = 0;
+      try {
+        const estatRef = doc(db, "nutricionistas", nutricionistaEmail, "estatisticas", "dietas");
+        const estatSnap = await getDoc(estatRef);
+        if (estatSnap.exists()) {
+          dietasEnviadas = estatSnap.data().totalDietasEnviadas || 0;
+          dietasSemanaAnterior = Math.max(0, dietasEnviadas - 1);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar estatísticas de dietas:", error);
+      }
+
       const taxaAcesso = Math.floor((pacientesAtivos / Math.max(totalPacientes, 1)) * 100);
 
-      const diasSemana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-      const acessosPorDia = diasSemana.map((dia, i) => ({ dia, acessos: (pacientesAtivos + i * 3) % 200 }));
+      const acessosPorDiaMap: { [key: string]: number } = {};
+      const seteDiasAtras = new Date();
+      seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
 
-      setMetrics({
+      for (const paciente of pacientes) {
+        const acessosRef = collection(db, "nutricionistas", nutricionistaEmail, "pacientes", paciente.id, "acessosApp");
+        const acessosSnap = await getDocs(acessosRef);
+        acessosSnap.forEach(acessoDoc => {
+          const timestamp = acessoDoc.data()?.timestamp?.toDate();
+          if (timestamp && timestamp >= seteDiasAtras) {
+            const dataAcesso = timestamp.toISOString().slice(0, 10);
+            acessosPorDiaMap[dataAcesso] = (acessosPorDiaMap[dataAcesso] || 0) + 1;
+          }
+        });
+      }
+
+      const diasSemana = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        return date.toISOString().slice(0, 10);
+      }).reverse();
+
+      const acessosDataCompleta: AcessoDia[] = diasSemana.map(dia => {
+        const date = new Date(dia);
+        date.setTime(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
+        return {
+          dia: date.toLocaleDateString('pt-BR', { weekday: 'short' }),
+          acessos: acessosPorDiaMap[dia] || 0,
+        };
+      });
+
+      setMetrics(prev => ({
+        ...prev,
         totalPacientes,
         pacientesAtivos,
         pacientesAtivosSemanaAnterior,
         dietasEnviadas,
         dietasSemanaAnterior,
         taxaAcesso,
-        acessosPorDia,
-      });
+        acessosPorDia: acessosDataCompleta,
+      }));
 
-      // Buscar consultas dos últimos 6 meses
-      const consultasRef = collection(db, "nutricionistas", session.user.email, "consultas");
+      const consultasRef = collection(db, "nutricionistas", nutricionistaEmail, "consultas");
       const seisMesesAtras = new Date();
       seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
-
-      // Converter a data para string no formato 'YYYY-MM-DD' para comparar com o seu campo "data"
       const seisMesesAtrasString = `${seisMesesAtras.getFullYear()}-${(seisMesesAtras.getMonth() + 1).toString().padStart(2, '0')}-${seisMesesAtras.getDate().toString().padStart(2, '0')}`;
-
       const q = query(consultasRef, where("data", ">=", seisMesesAtrasString));
       const consultasSnap = await getDocs(q);
       const consultas = consultasSnap.docs.map(doc => doc.data());
-
-      // Agrupar e contar consultas por mês
       const consultasPorMes: { [key: string]: number } = {};
       consultas.forEach(consulta => {
         const dataConsulta = consulta.data;
@@ -115,8 +150,6 @@ function Dashboard({ session }: { session: any }) {
           consultasPorMes[chave] = (consultasPorMes[chave] || 0) + 1;
         }
       });
-
-      // Formatar dados para o gráfico
       const dataGraficoConsultas = Object.keys(consultasPorMes)
         .sort()
         .map(chave => {
@@ -124,12 +157,11 @@ function Dashboard({ session }: { session: any }) {
           const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString('pt-BR', { month: 'short' });
           return { mes: nomeMes, consultas: consultasPorMes[chave] };
         });
-
       setConsultasUltimos6Meses(dataGraficoConsultas.slice(-6));
-    }
+    };
 
-    fetchMetrics()
-  }, [session])
+    fetchMetrics();
+  }, [session]);
 
   const calcVariation = (current: number, previous: number) => {
     if (previous === 0) return "+100%"
@@ -137,18 +169,15 @@ function Dashboard({ session }: { session: any }) {
     return `${percent >= 0 ? "+" : ""}${percent.toFixed(0)}%`
   }
 
-  const handleAddPatient = () => {
-    setIsModalOpen(false)
-    toast({
-      title: "Paciente adicionado com sucesso!",
-      description: "O novo paciente foi adicionado à sua lista.",
-      action: <ToastAction altText="Ver pacientes">Ver pacientes</ToastAction>,
-    })
-  }
-
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex">
+      <aside
+        className="hidden w-64 flex-col border-r border-border lg:flex"
+        style={{
+          backgroundColor: "hsl(var(--sidebar-background))",
+          color: "hsl(var(--sidebar-foreground))"
+        }}
+      >
         <div className="flex h-14 items-center border-b px-4">
           <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
             <LineChart className="h-5 w-5" />
@@ -159,12 +188,10 @@ function Dashboard({ session }: { session: any }) {
           <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
           <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
           <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
-
           <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
           <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
         </nav>
       </aside>
-
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
           <Sheet>
@@ -187,7 +214,6 @@ function Dashboard({ session }: { session: any }) {
           </div>
           <ThemeToggle />
         </header>
-
         <main className="flex-1 p-4 md:p-6">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
             <MetricCard title={t("total.patients")} value={metrics.totalPacientes} icon={<Users className="h-4 w-4 text-muted-foreground" />} note={`+${metrics.totalPacientes - 2} no último mês`} />
@@ -195,7 +221,6 @@ function Dashboard({ session }: { session: any }) {
             <MetricCard title={t("sent.diets")} value={metrics.dietasEnviadas} icon={<FileText className="h-4 w-4 text-muted-foreground" />} note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)} />
             <MetricCard title={t("app.access.rate")} value={`${metrics.taxaAcesso}%`} icon={<LineChart className="h-4 w-4 text-muted-foreground" />} note={`+${metrics.taxaAcesso - 45}% que mês passado`} />
           </div>
-
           <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
             <Card>
               <CardHeader>
@@ -214,7 +239,6 @@ function Dashboard({ session }: { session: any }) {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>{t("Consultas por Mês") || "Consultas por Mês"}</CardTitle>
@@ -268,15 +292,5 @@ function SidebarItem({ href, icon, label, pathname }: { href: string, icon: Reac
       {icon}
       {label}
     </Link>
-  )
-}
-
-function DollarIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
-      <path d="M12 18V6" />
-    </svg>
   )
 }

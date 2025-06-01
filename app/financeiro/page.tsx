@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react"; // adicione se ainda não tiver acima
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -53,6 +54,7 @@ export default function FinanceiroPage() {
     const pathname = usePathname();
     const [consultas, setConsultas] = useState<any[]>([]);
     const [pacientes, setPacientes] = useState<any[]>([]);
+    const { data: session } = useSession(); // adicione logo no topo do componente
     const [novaConsultaModalAberto, setNovaConsultaModalAberto] =
         useState(false);
     const [pacienteSelecionado, setPacienteSelecionado] = useState("");
@@ -72,22 +74,24 @@ export default function FinanceiroPage() {
     const mesAtual = dataAtual.getMonth();
     const anoAtual = dataAtual.getFullYear();
 
-    useEffect(() => {
-        async function fetchData() {
-            const userEmail = "villasboasliam@gmail.com"; // Substitua pela forma correta de obter o email
-            const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
-            const nutricionista = nutricionistasSnap.docs.find(
-                (doc) => doc.data().email === userEmail
-            );
-            if (nutricionista) {
-                const id = nutricionista.id;
-                setIdNutricionista(id);
-                await carregarPacientes(id);
-                await carregarConsultas(id);
-            }
+   useEffect(() => {
+    async function fetchData() {
+        if (!session?.user?.email) return;
+        const userEmail = session.user.email;
+
+        const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
+        const nutricionista = nutricionistasSnap.docs.find(
+            (doc) => doc.data().email === userEmail
+        );
+        if (nutricionista) {
+            const id = nutricionista.id;
+            setIdNutricionista(id);
+            await carregarPacientes(id);
+            await carregarConsultas(id);
         }
-        fetchData();
-    }, []);
+    }
+    fetchData();
+}, [session]);
 
     async function carregarPacientes(id: string) {
         const pacientesRef = collection(db, "nutricionistas", id, "pacientes");

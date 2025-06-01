@@ -1,79 +1,73 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { admin } from '@/lib/firebase-admin';
-import nodemailer from 'nodemailer';
-
-// Configure o transporter do Nodemailer (fora da função handler para ser reutilizado)
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // Use TLS
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+import { NextRequest, NextResponse } from "next/server";
+import { admin, db } from "@/lib/firebase-admin";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+import { setDoc, doc, serverTimestamp } from "firebase/firestore";
 
 export async function POST(req: NextRequest) {
   const { nome, email, telefone, nutricionistaId } = await req.json();
+  console.log("📥 Payload createPatient:", { nome, email, telefone, nutricionistaId });
 
-  if (!nome || !email || !telefone || !nutricionistaId) {
-    return NextResponse.json({ error: 'Por favor, preencha todos os campos.' }, { status: 400 });
-  }
+  // 1) Gera senha temporária
+  const tempPassword = crypto.randomBytes(6).toString("base64url");
+  console.log("🔑 Senha temporária:", tempPassword);
 
   try {
-    // 1. Criar usuário no Firebase Authentication
-    const userRecord = await admin.auth().createUser({
-      email: email,
-      // Sem senha aqui. O Firebase enviará um e-mail de verificação/redefinição.
-    });
+    // 2) Cria usuário no Auth
+    console.log("⏳ Criando usuário no Firebase Auth...");
+    const userRecord = await admin.auth().createUser({ email, password: tempPassword });
+    console.log("✅ Usuário criado:", userRecord.uid);
 
-    const uid = userRecord.uid;
-
-    // Adicionar custom claims para identificar o paciente e a plataforma
-    await admin.auth().setCustomUserClaims(uid, { role: 'paciente', platform: 'app' });
-
-    // 2. Criar documento no Firestore com o UID como ID
-    await admin.firestore()
-      .collection('nutricionistas')
-      .doc(nutricionistaId)
-      .collection('pacientes')
-      .doc(uid)
-      .set({
+    // 3) Salva no Firestore
+    await setDoc(
+      doc(db, "nutricionistas", nutricionistaId, "pacientes", userRecord.uid),
+      {
         nome,
         email,
         telefone,
-        status: "Ativo",
-        data_criacao: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        uid: userRecord.uid,
+        isFirstLogin: true,
+        createdAt: serverTimestamp(),
+      }
+    );
+    console.log("✅ Dados do paciente gravados no Firestore.");
 
-    // 3. Enviar e-mail de verificação (que também permite definir a senha)
-    const actionCodeSettings = {
-      url: `${process.env.NEXT_PUBLIC_APP_URL}/login`, // URL para onde o paciente será redirecionado
-      handleCodeInApp: false, // O código não será tratado no app antes de redirecionar
-    };
-    const link = await admin.auth().generateEmailVerificationLink(email, actionCodeSettings);
+    // 4) Configura transporte e envia email
+    console.log("🔌 Configurando Nodemailer com:", {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER,
+    });
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    });
 
-    // 4. Enviar o e-mail de verificação
-    const mailOptions = {
-      from: process.env.EMAIL_FROM,
+    console.log(`✉️  Tentando enviar e-mail para ${email}...`);
+    await transporter.sendMail({
+      from: `"NutriDash" <${process.env.EMAIL_FROM}>`,
       to: email,
-      subject: 'Verifique seu e-mail para acessar o NutriDash App',
-      html: `<p>Olá ${nome},</p><p>Por favor, clique no link abaixo para verificar seu e-mail e definir sua senha para acessar o **NutriDash App**:</p><p><a href="${link}">${link}</a></p><p>Se você não solicitou este cadastro, pode ignorar este e-mail.</p>`,
-    };
+      subject: "Seja bem-vindo — sua senha temporária",
+      html: `
+        <p>Olá ${nome},</p>
+        <p>Sua conta foi criada. Use estas credenciais no primeiro acesso:</p>
+        <ul>
+          <li><b>E-mail:</b> ${email}</li>
+          <li><b>Senha temporária:</b> ${tempPassword}</li>
+        </ul>
+        <p>Ao entrar no app, você será solicitado a escolher uma nova senha.</p>
+      `,
+    });
+    console.log("✅ E-mail enviado com sucesso!");
 
-    await transporter.sendMail(mailOptions);
-    console.log(`E-mail de verificação enviado para ${email}`);
-
-    return NextResponse.json({ message: 'Paciente criado com sucesso! Um e-mail de verificação foi enviado para o **NutriDash App**.', uid: uid }, { status: 200 });
-
-  } catch (error: any) {
-    console.error('Erro ao criar paciente ou enviar e-mail:', error);
-    let errorMessage = 'Erro ao criar o paciente.';
-    if (error.code === 'auth/email-already-in-use') {
-      errorMessage = 'Este e-mail já está em uso.';
-    } else if (error.message.includes('Failed to send email')) {
-      errorMessage = 'Erro ao enviar o e-mail de verificação.';
-    }
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error("❌ Erro ao criar paciente ou enviar e-mail:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

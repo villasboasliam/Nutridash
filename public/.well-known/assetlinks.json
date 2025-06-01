@@ -1,0 +1,10 @@
+{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.nutriapp.paciente",
+    "sha256_cert_fingerprints": [
+      "7A:72:12:F2:ED:36:CF:09:DB:7C:95:A4:76:7B:CE:1C:31:7B:75:84:AF:A8:63:C8:08:13:91:07:7F:A8:B3:99"
+    ]
+  }
+}
