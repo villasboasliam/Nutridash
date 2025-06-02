@@ -7,21 +7,21 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "public",
+    "source": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "cleanUrls": false,
     "rewrites": [
       {
         "source": "/.well-known/assetlinks.json",
         "destination": "/.well-known/assetlinks.json"
+      },
+      {
+        "source": "**",
+        "function": "nextServer"
       }
     ]
-  },
-  "functions": {
-    "source": "functions"
   }
 }

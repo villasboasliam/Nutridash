@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { getPatientAppAccesses } from '@/lib/access-data'
+import { authOptions } from "@/lib/authOptions"
+import { getPatientAppAccesses } from '@/lib/acess-data'
 
 
 export async function GET(req: Request) {
