@@ -2,6 +2,14 @@
   "projects": {
     "default": "nutriapp-42e7f"
   },
-  "targets": {},
+  "targets": {
+    "nutriapp-42e7f": {
+      "hosting": {
+        "nutriapp": [
+          "nutriapp-42e7f"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

@@ -35,11 +35,20 @@ export default function DashboardWrapper() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  useEffect(() => {
+useEffect(() => {
+  console.log("🔍 Status da sessão:", status, session)
+
     if (status === "unauthenticated") {
-      router.push("/nutridash")
-    }
-  }, [status, router])
+    const timeout = setTimeout(() => {
+      router.push("/login")
+    }, 300) // ou até 500ms se necessário
+
+    return () => clearTimeout(timeout)
+  }
+}, [status, router])
+
+
+
 
   if (status === "loading") {
     return <div className="p-6 text-center">Carregando...</div>

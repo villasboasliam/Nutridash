@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -48,12 +48,12 @@ export default function LoginPage() {
         title: "Login realizado",
         description: "Redirecionando...",
       })
-      router.push("/")
+      router.push("/pacientes") // Redireciona para uma rota protegida
     }
   }
 
   const handleGoogleLogin = async () => {
-    await signIn("google", { callbackUrl: "/" })
+    await signIn("google", { callbackUrl: "/nutridash" }) // mesmo ajuste
   }
 
   return (
@@ -96,12 +96,11 @@ export default function LoginPage() {
             </Button>
           </form>
 
-         <div className="mt-4 text-sm text-center">
-  <a href="/esqueci-senha" className="text-indigo-600 hover:underline">
-    Esqueci minha senha
-  </a>
-</div>
-
+          <div className="mt-4 text-sm text-center">
+            <a href="/esqueci-senha" className="text-indigo-600 hover:underline">
+              Esqueci minha senha
+            </a>
+          </div>
 
           <Separator className="my-6" />
 

@@ -11,9 +11,13 @@ export default function NutriDashLandingPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/") // Redireciona para dashboard se estiver logado
+      router.push("/pacientes") // Redireciona para dashboard se estiver logado
     }
   }, [status, router])
+
+  if (status === "loading") {
+    return <div className="text-center py-10">Carregando...</div>
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">

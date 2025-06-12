@@ -1,23 +1,23 @@
-import { NextResponse, NextRequest } from 'next/server';
-import { db } from '@/lib/firebase-admin';
+// app/api/nutricionistas/colecoes/[colecaoId]/materiais/route.ts
+import { NextResponse } from 'next/server'
+import { getFirestoreAdmin } from '@/lib/firebase-admin'
 
-export async function GET(req: NextRequest, { params }: { params: { colecaoId: string } }) {
-  const { colecaoId } = params;
-  const nutricionistaId = 'ID_DO_NUTRICIONISTA_LOGADO'; // *** SUBSTITUA PELA LÓGICA REAL DE AUTENTICAÇÃO ***
+export async function GET(req: Request, { params }: { params: { colecaoId: string } }) {
+  const db = getFirestoreAdmin()
+  if (!db) {
+    return NextResponse.json({ message: 'Erro ao inicializar Firebase Admin.' }, { status: 500 })
+  }
 
   try {
-    if (!nutricionistaId) {
-      return NextResponse.json({ message: "Nutricionista não autenticado.", status: 401 });
-    }
+    const snapshot = await db
+      .collectionGroup('materiais')
+      .where('colecaoId', '==', params.colecaoId)
+      .get()
 
-    const colecaoDocRef = db.collection('nutricionistas').doc(nutricionistaId).collection('colecoes').doc(colecaoId);
-    const materiaisSubcollectionRef = colecaoDocRef.collection('materiais');
-    const snapshot = await materiaisSubcollectionRef.get();
-    const materiais = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    return NextResponse.json(materiais, { status: 200 });
-  } catch (error: any) {
-    console.error(`Erro ao buscar materiais da coleção ${colecaoId}:`, error);
-    return NextResponse.json({ message: `Erro ao buscar materiais da coleção ${colecaoId}`, status: 500 });
+    const materiais = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    return NextResponse.json(materiais, { status: 200 })
+  } catch (error) {
+    console.error('Erro ao buscar materiais:', error)
+    return NextResponse.json({ message: 'Erro ao buscar materiais.' }, { status: 500 })
   }
 }
