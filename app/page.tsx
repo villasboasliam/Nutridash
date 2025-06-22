@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { collection, getDocs, getDoc, doc, query, where, orderBy } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-
+import * as React from "react"
 import { Calendar, FileText, Home, LineChart, Menu, Plus, Users, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,11 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 interface AcessoDia {
   dia: string
   acessos: number
+}
+interface Paciente {
+  id: string
+  status?: string
+  [key: string]: any
 }
 
 interface ConsultaMes {
@@ -80,7 +85,8 @@ function Dashboard({ session }: { session: any }) {
       const nutricionistaEmail = session.user.email;
       const nutricionistaPacientesRef = collection(db, "nutricionistas", nutricionistaEmail, "pacientes");
       const pacientesSnap = await getDocs(nutricionistaPacientesRef);
-      const pacientes = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const pacientes: Paciente[] = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
 
       const totalPacientes = pacientes.length;
       const pacientesAtivos = pacientes.filter(p => p.status === "Ativo").length;
@@ -272,7 +278,7 @@ function Dashboard({ session }: { session: any }) {
   )
 }
 
-function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: JSX.Element; note: string }) {
+function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: React.ReactElement; note: string }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">

@@ -33,11 +33,12 @@ export default function LoginPage() {
     setLoading(true)
     setErrorMessage(null)
 
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    })
+   const res = await signIn("credentials", {
+  redirect: false,
+  email,
+  password,
+  callbackUrl: "https://ssrnutriapp42e7f-ktxg4ibdgq-uc.a.run.app",
+})
 
     setLoading(false)
 
@@ -48,7 +49,7 @@ export default function LoginPage() {
         title: "Login realizado",
         description: "Redirecionando...",
       })
-      router.push("/pacientes") // Redireciona para uma rota protegida
+      router.push("https://ssrnutriapp42e7f-ktxg4ibdgq-uc.a.run.app")
     }
   }
 

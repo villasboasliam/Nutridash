@@ -5,6 +5,7 @@ import { FirestoreAdapter } from "@next-auth/firebase-adapter"
 import { getFirestoreAdmin } from "@/lib/firebase-admin"
 
 const firestoreAdmin = getFirestoreAdmin()
+console.log("🔐 NEXTAUTH_SECRET usado:", process.env.NEXTAUTH_SECRET)
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -63,9 +64,27 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
+  secret: process.env.NEXTAUTH_SECRET,
+
   adapter: FirestoreAdapter({ firestore: firestoreAdmin! }),
+
   session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
+
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+  },
+
+  pages: {
+    signIn: "/login",
+  },
 
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -89,6 +108,7 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
+      // ✅ Redirecionamento padrão após login com credentials
       return true
     },
 
@@ -96,6 +116,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.uid = user.id
         token.email = user.email
+        token.name = user.name
+        token.picture = (user as any).picture
         console.log("📥 CALLBACK: jwt atualizado com user ->", token)
       } else {
         console.log("📥 CALLBACK: jwt sem user, mantendo token ->", token)
@@ -108,6 +130,8 @@ export const authOptions: NextAuthOptions = {
         ...(session.user || {}),
         uid: typeof token.uid === "string" ? token.uid : undefined,
         email: typeof token.email === "string" ? token.email : undefined,
+        name: typeof token.name === "string" ? token.name : undefined,
+        image: typeof token.picture === "string" ? token.picture : undefined,
       }
       console.log("📥 CALLBACK: session preenchida ->", session)
       return session
