@@ -1,8 +1,13 @@
 {
   "hosting": {
-    "source": ".",
-    "frameworksBackend": {
-      "cors": false
-    }
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "ssrnutriapp42e7f",
+          "region": "us-central1"
+        }
+      }
+    ]
   }
 }

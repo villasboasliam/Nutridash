@@ -4,21 +4,17 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { collection, getDocs, getDoc, doc, query, where, orderBy } from "firebase/firestore"
+import { collection, getDocs, getDoc, doc, query, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import * as React from "react"
-import { Calendar, FileText, Home, LineChart, Menu, Plus, Users, Video } from "lucide-react"
+import { Calendar, FileText, Home, LineChart, Menu, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useMobile } from "@/hooks/use-mobile"
 import { useLanguage } from "@/contexts/language-context"
 import { useToast } from "@/components/ui/use-toast"
-import { ToastAction } from "@/components/ui/toast"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts"
 
 interface AcessoDia {
@@ -40,34 +36,32 @@ export default function DashboardWrapper() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-useEffect(() => {
-  console.log("🔍 Status da sessão:", status, session)
+  console.log("🚀 useSession:", { status, session })
 
+  useEffect(() => {
+    if (status === "loading") return // 🔥 só tenta redirecionar quando loading terminar
     if (status === "unauthenticated") {
-    const timeout = setTimeout(() => {
+      console.log("⚠ Redirecionando pois status é unauthenticated")
       router.push("/login")
-    }, 300) // ou até 500ms se necessário
+    }
+  }, [status, router])
 
-    return () => clearTimeout(timeout)
-  }
-}, [status, router])
-
-
-
-
-  if (status === "loading") {
-    return <div className="p-6 text-center">Carregando...</div>
+  if (status !== "authenticated") {
+    console.log("⏳ Ainda não autenticado, status:", status)
+    return <div className="p-6 text-center">Carregando sessão...</div>
   }
 
+  console.log("✅ Sessão autenticada, renderizando Dashboard")
   return <Dashboard session={session} />
 }
 
+
+
+
+
 function Dashboard({ session }: { session: any }) {
-  const isMobile = useMobile()
   const pathname = usePathname()
   const { t } = useLanguage()
-  const { toast } = useToast()
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [metrics, setMetrics] = useState({
     totalPacientes: 0,
     pacientesAtivos: 0,
@@ -83,10 +77,8 @@ function Dashboard({ session }: { session: any }) {
     const fetchMetrics = async () => {
       if (!session?.user?.email) return;
       const nutricionistaEmail = session.user.email;
-      const nutricionistaPacientesRef = collection(db, "nutricionistas", nutricionistaEmail, "pacientes");
-      const pacientesSnap = await getDocs(nutricionistaPacientesRef);
+      const pacientesSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes"));
       const pacientes: Paciente[] = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
 
       const totalPacientes = pacientes.length;
       const pacientesAtivos = pacientes.filter(p => p.status === "Ativo").length;
@@ -95,15 +87,12 @@ function Dashboard({ session }: { session: any }) {
       let dietasEnviadas = 0;
       let dietasSemanaAnterior = 0;
       try {
-        const estatRef = doc(db, "nutricionistas", nutricionistaEmail, "estatisticas", "dietas");
-        const estatSnap = await getDoc(estatRef);
+        const estatSnap = await getDoc(doc(db, "nutricionistas", nutricionistaEmail, "estatisticas", "dietas"));
         if (estatSnap.exists()) {
           dietasEnviadas = estatSnap.data().totalDietasEnviadas || 0;
           dietasSemanaAnterior = Math.max(0, dietasEnviadas - 1);
         }
-      } catch (error) {
-        console.error("Erro ao buscar estatísticas de dietas:", error);
-      }
+      } catch (error) {}
 
       const taxaAcesso = Math.floor((pacientesAtivos / Math.max(totalPacientes, 1)) * 100);
 
@@ -112,8 +101,7 @@ function Dashboard({ session }: { session: any }) {
       seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
 
       for (const paciente of pacientes) {
-        const acessosRef = collection(db, "nutricionistas", nutricionistaEmail, "pacientes", paciente.id, "acessosApp");
-        const acessosSnap = await getDocs(acessosRef);
+        const acessosSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes", paciente.id, "acessosApp"));
         acessosSnap.forEach(acessoDoc => {
           const timestamp = acessoDoc.data()?.timestamp?.toDate();
           if (timestamp && timestamp >= seteDiasAtras) {
@@ -176,7 +164,7 @@ function Dashboard({ session }: { session: any }) {
     };
 
     fetchMetrics();
-  }, [session]);
+  }, [session])
 
   const calcVariation = (current: number, previous: number) => {
     if (previous === 0) return "+100%"
@@ -186,13 +174,7 @@ function Dashboard({ session }: { session: any }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside
-        className="hidden w-64 flex-col border-r border-border lg:flex"
-        style={{
-          backgroundColor: "hsl(var(--sidebar-background))",
-          color: "hsl(var(--sidebar-foreground))"
-        }}
-      >
+      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
         <div className="flex h-14 items-center border-b px-4">
           <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
             <LineChart className="h-5 w-5" />
@@ -207,7 +189,8 @@ function Dashboard({ session }: { session: any }) {
           <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
         </nav>
       </aside>
-      <div className="flex flex-1 flex-col">
+
+      <div className="flex flex-col flex-1 lg:ml-64">
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
           <Sheet>
             <SheetTrigger asChild>
@@ -222,6 +205,13 @@ function Dashboard({ session }: { session: any }) {
                   <span>NutriDash</span>
                 </Link>
               </div>
+              <nav className="flex-1 space-y-1 p-2">
+                <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
+                <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
+                <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+                <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+                <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
+              </nav>
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
@@ -229,67 +219,78 @@ function Dashboard({ session }: { session: any }) {
           </div>
           <ThemeToggle />
         </header>
-        <main className="flex-1 p-4 md:p-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
-            <MetricCard title={t("total.patients")} value={metrics.totalPacientes} icon={<Users className="h-4 w-4 text-muted-foreground" />} note={`+${metrics.totalPacientes - 2} no último mês`} />
-            <MetricCard title={t("active.patients")} value={metrics.pacientesAtivos} icon={<Calendar className="h-4 w-4 text-muted-foreground" />} note={calcVariation(metrics.pacientesAtivos, metrics.pacientesAtivosSemanaAnterior)} />
-            <MetricCard title={t("sent.diets")} value={metrics.dietasEnviadas} icon={<FileText className="h-4 w-4 text-muted-foreground" />} note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)} />
-            <MetricCard title={t("app.access.rate")} value={`${metrics.taxaAcesso}%`} icon={<LineChart className="h-4 w-4 text-muted-foreground" />} note={`+${metrics.taxaAcesso - 45}% que mês passado`} />
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("app.access")}</CardTitle>
-                <CardDescription>{t("daily.access")}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={metrics.acessosPorDia}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="dia" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="acessos" fill="#6366F1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("Consultas por Mês") || "Consultas por Mês"}</CardTitle>
-                <CardDescription>{t("Número de consultas nos últimos 6 meses") || "Número de consultas nos últimos 6 meses"}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={consultasUltimos6Meses}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="mes" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="consultas" fill="#10B981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </div>
-    </div>
-  )
-}
 
-function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: React.ReactElement; note: string }) {
-  return (
+        <main className="flex-1 p-4 md:p-6">
+          
+  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
+    <MetricCard
+      title={t("total.patients")}
+      value={metrics.totalPacientes}
+      icon={<Users className="h-4 w-4 text-muted-foreground" />}
+      note={`+${metrics.totalPacientes - 2} no último mês`}
+    />
+    <MetricCard
+      title={t("active.patients")}
+      value={metrics.pacientesAtivos}
+      icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+      note={calcVariation(metrics.pacientesAtivos, metrics.pacientesAtivosSemanaAnterior)}
+    />
+    <MetricCard
+      title={t("sent.diets")}
+      value={metrics.dietasEnviadas}
+      icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+      note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)}
+    />
+    <MetricCard
+      title={t("app.access.rate")}
+      value={`${metrics.taxaAcesso}%`}
+      icon={<LineChart className="h-4 w-4 text-muted-foreground" />}
+      note={`+${metrics.taxaAcesso - 45}% que mês passado`}
+    />
+  </div>
+
+  <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
+      <CardHeader>
+        <CardTitle>{t("app.access")}</CardTitle>
+        <CardDescription>{t("daily.access")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <p className="text-xs text-muted-foreground">{note}</p>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={metrics.acessosPorDia}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="dia" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="acessos" fill="#6366F1" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("Consultas por Mês")}</CardTitle>
+        <CardDescription>{t("Número de consultas nos últimos 6 meses")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={consultasUltimos6Meses}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="consultas" fill="#10B981" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  </div>
+</main>
+
+     
+      </div>
+    </div>
   )
 }
 
@@ -307,5 +308,19 @@ function SidebarItem({ href, icon, label, pathname }: { href: string, icon: Reac
       {icon}
       {label}
     </Link>
+  )
+}
+function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: React.ReactElement; note: string }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground">{note}</p>
+      </CardContent>
+    </Card>
   )
 }

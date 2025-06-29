@@ -258,20 +258,23 @@ function SidebarLinks({ pathname, t }: { pathname: string, t: any }) {
 
   return (
     <>
-      {links.map(({ href, label, icon: Icon }) => (
-        <Link
-          key={href}
-          href={href}
-          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
-            pathname === href || pathname.startsWith(`${href}/`)
-              ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
-              : "hover:bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]"
-          }`}
-        >
-          <Icon className="h-4 w-4" />
-          {label}
-        </Link>
-      ))}
+      {links.map(({ href, label, icon: Icon }) => {
+        const isActive = pathname === href || pathname.startsWith(`${href}/`)
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+              isActive
+                ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
+                : "text-foreground hover:bg-muted"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </Link>
+        )
+      })}
     </>
   )
 }

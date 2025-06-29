@@ -33,12 +33,12 @@ export default function LoginPage() {
     setLoading(true)
     setErrorMessage(null)
 
-   const res = await signIn("credentials", {
-  redirect: false,
-  email,
-  password,
-  callbackUrl: "https://ssrnutriapp42e7f-ktxg4ibdgq-uc.a.run.app",
-})
+    const res = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
+      callbackUrl: "/pacientes",
+    })
 
     setLoading(false)
 
@@ -49,12 +49,12 @@ export default function LoginPage() {
         title: "Login realizado",
         description: "Redirecionando...",
       })
-      router.push("https://ssrnutriapp42e7f-ktxg4ibdgq-uc.a.run.app")
+      router.push("/pacientes")
     }
   }
 
   const handleGoogleLogin = async () => {
-    await signIn("google", { callbackUrl: "/nutridash" }) // mesmo ajuste
+    await signIn("google", { callbackUrl: "/pacientes" })
   }
 
   return (

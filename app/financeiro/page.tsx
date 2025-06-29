@@ -50,6 +50,18 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+type Consulta = {
+  id: string
+  paciente: string
+  data: string
+  horario: string
+  duracao: string
+  valor: number
+  status: string
+  pacienteInfo?: any
+}
+
+
 export default function FinanceiroPage() {
     const pathname = usePathname();
     const [consultas, setConsultas] = useState<any[]>([]);
@@ -268,75 +280,51 @@ export default function FinanceiroPage() {
     return (
         <div className="flex min-h-screen bg-background">
             <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex">
-                <div className="flex h-14 items-center border-b px-4">
-                    <Link
-                        href="/"
-                        className="flex items-center gap-2 font-semibold text-indigo-600"
-                    >
-                        <LineChart className="h-5 w-5" />
-                        <span>NutriDash</span>
-                    </Link>
-                </div>
-                <nav className="flex-1 space-y-1 p-2">
-                    <SidebarItem
-                        href="/"
-                        icon={<Home className="h-4 w-4" />}
-                        label="Dashboard"
-                        pathname={pathname}
-                    />
-                    <SidebarItem
-                        href="/pacientes"
-                        icon={<Users className="h-4 w-4" />}
-                        label="Pacientes"
-                        pathname={pathname}
-                    />
-                    <SidebarItem
-                        href="/materiais"
-                        icon={<FileText className="h-4 w-4" />}
-                        label="Materiais"
-                        pathname={pathname}
-                    />
+  <div className="flex h-14 items-center border-b px-4">
+    <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+      <LineChart className="h-5 w-5" />
+      <span>NutriDash</span>
+    </Link>
+  </div>
+  <nav className="flex-1 space-y-1 p-2">
+    <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
+    <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
+    <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+    <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+    <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
+  </nav>
+</aside>
 
-                    <SidebarItem
-                        href="/financeiro"
-                        icon={<LineChart className="h-4 w-4" />}
-                        label="Financeiro"
-                        pathname={pathname}
-                    />
-                    <SidebarItem
-                        href="/perfil"
-                        icon={<Users className="h-4 w-4" />}
-                        label="Perfil"
-                        pathname={pathname}
-                    />
-                </nav>
-            </aside>
+<div className="flex flex-1 flex-col">
+  <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="icon" className="lg:hidden">
+          <Menu className="h-5 w-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-64 p-0 z-50">
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+            <LineChart className="h-5 w-5" />
+            <span>NutriDash</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 p-2">
+          <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
+          <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
+          <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+          <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+          <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
+        </nav>
+      </SheetContent>
+    </Sheet>
+    <div className="w-full flex-1">
+      <h2 className="text-lg font-medium">Financeiro</h2>
+    </div>
+    <ThemeToggle />
+  </header>
 
-            <div className="flex flex-1 flex-col">
-                <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline" size="icon" className="lg:hidden">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="w-64 p-0">
-                            <div className="flex h-14 items-center border-b px-4">
-                                <Link
-                                    href="/"
-                                    className="flex items-center gap-2 font-semibold text-indigo-600"
-                                >
-                                    <LineChart className="h-5 w-5" />
-                                    <span>NutriDash</span>
-                                </Link>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
-                    <div className="w-full flex-1">
-                        <h2 className="text-lg font-medium">Financeiro</h2>
-                    </div>
-                    <ThemeToggle />
-                </header>
                 <main className="flex-1 p-4 md:p-6">
                     <div className="flex flex-col gap-6">
                         <div className="flex items-center justify-between">

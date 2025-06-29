@@ -433,7 +433,15 @@ export default function PerfilPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel className="rounded-md">Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => signOut({ callbackUrl: "/" })} className="bg-destructive hover:bg-destructive/90 text-white rounded-md">Sair</AlertDialogAction>
+                                        <AlertDialogAction
+  onClick={() => {
+    signOut({ callbackUrl: "/" }).then(() => window.location.reload())
+  }}
+  className="bg-destructive hover:bg-destructive/90 text-white rounded-md"
+>
+  Sair
+</AlertDialogAction>
+
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
