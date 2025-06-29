@@ -1,35 +1,39 @@
-# Node
-/node_modules/
+# node
+/node_modules
+/.pnpm-store
 
-# Next.js
-/.next/
-/out/
-/build/
-/.vercel
+# next.js
+/.next
+/out
 
-# Firebase
+# firebase build
 /.firebase
-firebase.json
-firestore.indexes.json
-firestore.rules
-storage.rules
 
-# Logs & debug
+# next swc binaries
+*.node
+
+# dlls and exe from image & build tools
+*.dll
+*.exe
+
+# webpack packs
+*.pack
+
+# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-*.tsbuildinfo
 
-# Env
+# env
 .env*
-nutriapp-42e7f-firebase-adminsdk-fbsvc-617497dbbd.json
+.env.local
 
-# Next.js types
-next-env.d.ts
-
-# ZIP / backups
+# other
 *.zip
+*.sqlite
+*.db
+*.log
 
-# Ignore VS Code settings (opcional)
-.vscode/
+# large manual files
+estrutura_projeto.txt
