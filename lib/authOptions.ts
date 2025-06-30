@@ -67,28 +67,29 @@ export const authOptions: NextAuthOptions = {
 
   session: { strategy: "jwt" },
 
-cookies: {
-  sessionToken: {
-    name: `next-auth.session-token`,
-    options: {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: true, // FORCE TRUE EM PROD
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`, // 🔥 padrão seguro para Vercel/HTTPS
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true, // sempre true em produção HTTPS
+      },
     },
   },
-},
 
   pages: {
     signIn: "/login",
   },
+
+  trustHost: true, // 🔥 ESSENCIAL PARA DEPLOY SERVERLESS NA VERCEL
 
   callbacks: {
     async signIn({ user, account, profile }) {
       console.log("📥 CALLBACK: signIn chamado ->", { user, account, profile })
       return true
     },
-     trustHost: true, // 🔥 coloque aqui
     async jwt({ token, user }) {
       console.log("📥 CALLBACK: jwt antes ->", token)
       if (user) {
@@ -100,7 +101,6 @@ cookies: {
       }
       return token
     },
-
     async session({ session, token }) {
       console.log("📥 CALLBACK: session antes ->", session)
       if (session.user) {
