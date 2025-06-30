@@ -74,7 +74,7 @@ cookies: {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: process.env.NODE_ENV === "production",
+      secure: true, // FORCE TRUE EM PROD
     },
   },
 },
@@ -88,7 +88,7 @@ cookies: {
       console.log("📥 CALLBACK: signIn chamado ->", { user, account, profile })
       return true
     },
-
+     trustHost: true, // 🔥 coloque aqui
     async jwt({ token, user }) {
       console.log("📥 CALLBACK: jwt antes ->", token)
       if (user) {
