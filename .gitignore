@@ -37,3 +37,5 @@ yarn-error.log*
 
 # large manual files
 estrutura_projeto.txt
+.vercel
+.env*.local
