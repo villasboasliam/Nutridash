@@ -104,7 +104,7 @@ export default function LoginPage() {
           </div>
 
           <Separator className="my-6" />
-
+          {/*
           <Button
             variant="outline"
             className="w-full flex items-center justify-center gap-2"
@@ -113,7 +113,7 @@ export default function LoginPage() {
             <FcGoogle className="h-5 w-5" />
             Entrar com Google
           </Button>
-
+            */}
           <div className="mt-4 text-sm text-center">
             Não tem uma conta?{" "}
             <Link href="/cadastro" className="text-indigo-600 hover:underline">
