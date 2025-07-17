@@ -541,24 +541,36 @@ try {
         <main className="flex-1 p-4 md:p-6">
           {/* Adicionado div para controlar a largura máxima e centralizar */}
           <div className="max-w-4xl mx-auto w-full">
-          <div className="flex items-center justify-between mb-4">
+     <div className="flex items-center justify-between mb-6">
   <div className="flex items-center gap-4">
+    {/* Botão Voltar */}
     <Button variant="outline" size="icon" asChild>
       <Link href="/pacientes">
         <ArrowLeft className="h-4 w-4" />
         <span className="sr-only">Voltar</span>
       </Link>
     </Button>
-    <h1 className="text-2xl font-semibold tracking-tight">{patient?.nome}</h1>
+
+    {/* Switch Paciente Ativo */}
+    <div className="flex items-center gap-2">
+      <Switch
+        id="patient-status"
+        checked={isActive}
+        onCheckedChange={togglePatientStatus}
+      />
+      <Label htmlFor="patient-status">
+        {isActive ? "Paciente Ativo" : "Paciente Inativo"}
+      </Label>
+    </div>
   </div>
 
-  {/* Botão ícone para excluir paciente */}
+  {/* Botão ícone de lixeira preto */}
   <AlertDialog>
     <AlertDialogTrigger asChild>
       <Button
-        variant="ghost"
+        variant="outline"
         size="icon"
-        className="text-destructive hover:bg-destructive/10"
+        className="border border-black text-black hover:bg-black hover:text-white transition-colors"
         title="Excluir paciente"
       >
         <Trash className="h-5 w-5" />
@@ -582,17 +594,6 @@ try {
   </AlertDialog>
 </div>
 
-
-            <div className="flex items-center gap-2 mb-6">
-              <Switch
-                id="patient-status"
-                checked={isActive}
-                onCheckedChange={togglePatientStatus}
-              />
-              <Label htmlFor="patient-status">
-                {isActive ? "Paciente Ativo" : "Paciente Inativo"}
-              </Label>
-            </div>
 
             {/* Informações Pessoais */}
             <Card className="mb-6">
