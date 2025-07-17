@@ -541,15 +541,47 @@ try {
         <main className="flex-1 p-4 md:p-6">
           {/* Adicionado div para controlar a largura máxima e centralizar */}
           <div className="max-w-4xl mx-auto w-full">
-            <div className="flex items-center gap-4 mb-4">
-              <Button variant="outline" size="icon" asChild>
-                <Link href="/pacientes">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="sr-only">Voltar</span>
-                </Link>
-              </Button>
-              <h1 className="text-2xl font-semibold tracking-tight">{patient?.nome}</h1>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+  <div className="flex items-center gap-4">
+    <Button variant="outline" size="icon" asChild>
+      <Link href="/pacientes">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="sr-only">Voltar</span>
+      </Link>
+    </Button>
+    <h1 className="text-2xl font-semibold tracking-tight">{patient?.nome}</h1>
+  </div>
+
+  {/* Botão ícone para excluir paciente */}
+  <AlertDialog>
+    <AlertDialogTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="text-destructive hover:bg-destructive/10"
+        title="Excluir paciente"
+      >
+        <Trash className="h-5 w-5" />
+        <span className="sr-only">Excluir paciente</span>
+      </Button>
+    </AlertDialogTrigger>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
+        <AlertDialogDescription>
+          Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados do Firestore.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+        <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
+          Excluir
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+</div>
+
 
             <div className="flex items-center gap-2 mb-6">
               <Switch
@@ -1121,32 +1153,7 @@ try {
               </TabsContent>
             </Tabs>
 
-            {/* Botão de Excluir Paciente */}
-            <div className="flex justify-center mt-6">
-              <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full">
-                      Excluir Paciente
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados do Firestore.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
+            
           </div> {/* Fim do div de controle de largura principal */}
         </main>
       </div>
