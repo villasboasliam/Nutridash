@@ -339,21 +339,28 @@ export default function FinanceiroPage() {
 
     async function handleEditConsultaClick(consulta: Consulta) {
         console.log("handleEditConsultaClick: Iniciando edição para consulta:", consulta.id);
-        console.log("handleEditConsultaClick: Detalhes da consulta recebida:", consulta); // CHECK THIS LOG!
+        console.log("handleEditConsultaClick: Detalhes da consulta recebida:", consulta);
 
         setConsultaSendoEditada(consulta);
         
-        // Ensure 'pacientes' array is populated before trying to find
-        console.log("handleEditConsultaClick: Pacientes atualmente no estado:", pacientes.length, pacientes); // CHECK THIS LOG!
-        const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
+        console.log("handleEditConsultaClick: Pacientes atualmente no estado:", pacientes.length, pacientes);
+
+        // Normaliza o nome do paciente da consulta para a busca
+        const nomeConsultaNormalizado = consulta.paciente.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        // Procura o paciente no array de pacientes, normalizando também o nome do paciente cadastrado
+        const foundPatient = pacientes.find(p => 
+            p.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === nomeConsultaNormalizado
+        );
         
         if (!foundPatient) {
-            console.error(`handleEditConsultaClick: Paciente "${consulta.paciente}" NÃO ENCONTRADO no estado 'pacientes'. Verifique o carregamento de pacientes.`);
-            alert("Erro: Paciente da consulta não encontrado. Por favor, recarregue a página.");
-            return; // Exit if patient not found to prevent further errors
+            console.error(`handleEditConsultaClick: Paciente "${consulta.paciente}" NÃO ENCONTRADO no estado 'pacientes'.`);
+            console.error("Verifique se o paciente existe no Firestore e se o nome está consistente.");
+            alert("Erro: Paciente da consulta não encontrado. Verifique se o paciente ainda existe ou se há inconsistência no nome.");
+            return; // Sai da função para evitar erros
         }
 
-        setEditPacienteId(foundPatient.id); // Use the found patient's ID
+        setEditPacienteId(foundPatient.id);
         console.log("handleEditConsultaClick: Paciente ID para edição:", foundPatient.id);
 
         setEditData(consulta.data);
@@ -767,7 +774,7 @@ export default function FinanceiroPage() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleEditConsultaClick(consulta)}
-                                                                    className="text-primary hover:text-primary/80" // Elegante e preto/tema
+                                                                    className="text-primary hover:text-primary/80" // Ícone de edição elegante (preto/tema)
                                                                 >
                                                                     <Edit className="h-4 w-4" />
                                                                 </Button>
