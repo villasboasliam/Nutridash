@@ -12,6 +12,7 @@ import {
     getDoc,
     addDoc,
     deleteDoc,
+    updateDoc, // Adicionado para a função de edição
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,8 @@ import {
     Video,
     ChevronLeft,
     ChevronRight,
+    Trash2, // Import the Trash2 icon
+    Edit, // Import the Edit icon
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -81,6 +84,15 @@ export default function FinanceiroPage() {
         new Date().getFullYear()
     );
     const [idNutricionista, setIdNutricionista] = useState<string | null>(null);
+
+    // States para o modal de edição
+    const [editarConsultaModalAberto, setEditarConsultaModalAberto] = useState(false);
+    const [consultaSendoEditada, setConsultaSendoEditada] = useState<Consulta | null>(null);
+    const [editPaciente, setEditPaciente] = useState("");
+    const [editData, setEditData] = useState("");
+    const [editHorario, setEditHorario] = useState("");
+    const [editDuracao, setEditDuracao] = useState("");
+    const [editValor, setEditValor] = useState("");
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -214,6 +226,41 @@ export default function FinanceiroPage() {
         if (!confirm) return;
         await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
         await carregarConsultas(idNutricionista);
+    }
+
+    async function handleEditConsultaClick(consulta: Consulta) {
+        setConsultaSendoEditada(consulta);
+        setEditPaciente(consulta.pacienteInfo?.id || consulta.paciente); // Usa o ID do paciente se disponível, senão o nome
+        setEditData(consulta.data);
+        setEditHorario(consulta.horario);
+        setEditDuracao(consulta.duracao);
+        setEditValor(consulta.valor.toString());
+        setEditarConsultaModalAberto(true);
+    }
+
+    async function atualizarConsulta() {
+        if (!consultaSendoEditada || !idNutricionista) return;
+
+        const pacienteData = pacientes.find((p) => p.id === editPaciente);
+        const pacienteNome = pacienteData?.nome || editPaciente;
+
+        const updatedData = {
+            paciente: pacienteNome,
+            data: editData,
+            horario: editHorario,
+            duracao: editDuracao,
+            valor: parseFloat(editValor),
+        };
+
+        try {
+            await updateDoc(doc(db, "nutricionistas", idNutricionista, "consultas", consultaSendoEditada.id), updatedData);
+            setEditarConsultaModalAberto(false);
+            await carregarConsultas(idNutricionista);
+            alert("Consulta atualizada com sucesso!");
+        } catch (error) {
+            console.error("Erro ao atualizar consulta:", error);
+            alert("Erro ao atualizar consulta.");
+        }
     }
 
     function calcularReceita(consultasFiltradas: any[]) {
@@ -424,254 +471,269 @@ export default function FinanceiroPage() {
                             </Select>
                         </div>
 
-                        {/* Calendário de Consultas */}
-                        <Card className="mt-6">
-                            <CardHeader>
-                                <CardTitle>Agenda de Consultas</CardTitle>
-                                <CardDescription>
-                                    Visualize suas consultas no calendário mensal
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-7 gap-1 text-center font-semibold mb-2">
-                                    {diasDaSemana.map((dia, index) => (
-                                        <div key={index}>{dia}</div>
-                                    ))}
-                                </div>
-
-                                <div className="grid grid-cols-7 gap-1">
-                                    {Array.from(
-                                        { length: primeiroDiaSemana(mesSelecionado, anoSelecionado) },
-                                        (_, i) => (
-                                            <div
-                                                key={`empty-${i}`}
-                                                className="border rounded-md h-28 p-1 bg-muted"
-                                            ></div>
-                                        )
-                                    )}
-
-                                    {Array.from(
-                                        { length: diasNoMes(mesSelecionado, anoSelecionado) },
-                                        (_, index) => {
-                                            const diaCalendario = index + 1;
-
-                                            const consultasDoDia = consultas.filter((consulta) => {
-                                                const dataConsulta = new Date(consulta.data);
-                                                // Ajuste para UTC para evitar problemas de timezone
-                                                const diaConsultaUTC = dataConsulta.getUTCDate();
-                                                const mesConsultaUTC = dataConsulta.getUTCMonth();
-                                                const anoConsultaUTC = dataConsulta.getUTCFullYear();
-
-                                                return (
-                                                    diaConsultaUTC === diaCalendario &&
-                                                    mesConsultaUTC === mesSelecionado &&
-                                                    anoConsultaUTC === anoSelecionado
-                                                );
-                                            });
-
-                                            const isHoje =
-                                                diaCalendario === diaAtual &&
-                                                mesSelecionado === mesAtual &&
-                                                anoSelecionado === anoAtual;
-
-                                            return (
-                                                <div
-                                                    key={diaCalendario}
-                                                    className={`border rounded-md h-28 p-1 flex flex-col overflow-y-auto ${
-                                                        isHoje ? "bg-emerald-100 border-emerald-500 dark:bg-emerald-900 dark:border-emerald-300" : ""
-                                                    }`}
-                                                >
-                                                    <div className="text-xs font-semibold">{diaCalendario}</div>
-                                                    {consultasDoDia.map((consulta) => (
-                                                        <div
-                                                            key={consulta.id}
-                                                            className="mt-1 text-sm bg-indigo-100 dark:bg-indigo-900 rounded p-1 px-2 text-indigo-600 dark:text-indigo-300 font-semibold"
-                                                        >
-                                                            <div>{consulta.horario}</div>
-                                                            <div className="truncate">{consulta.paciente}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            );
-                                        }
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Lista de Consultas */}
+                        {/* Tabela de Consultas Agendadas */}
                         <Card className="mt-6">
                             <CardHeader>
                                 <CardTitle>Consultas Agendadas</CardTitle>
                                 <CardDescription>Lista completa das suas consultas</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {consultas.length > 0 ? (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-muted">
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horário</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duração</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor (R$)</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {paginatedConsultas.length === 0 ? (
                                                 <tr>
-                                                    <th className="px-4 py-2">Paciente</th>
-                                                    <th className="px-4 py-2">Data</th>
-                                                    <th className="px-4 py-2">Horário</th>
-                                                    <th className="px-4 py-2">Duração</th>
-                                                    <th className="px-4 py-2">Valor (R$)</th>
-                                                    <th className="px-4 py-2 text-right">Ações</th>
+                                                    <td colSpan={6} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhuma consulta encontrada.</td>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                {paginatedConsultas
-                                                    .map((consulta) => (
-                                                        <tr key={consulta.id} className="border-b hover:bg-muted/50">
-                                                            <td className="px-4 py-2">{consulta.paciente}</td>
-                                                            <td className="px-4 py-2">{consulta.data}</td>
-                                                            <td className="px-4 py-2">{consulta.horario}</td>
-                                                            <td className="px-4 py-2">{consulta.duracao} min</td>
-                                                            <td className="px-4 py-2">
-                                                                R$ {consulta.pacienteInfo?.valorConsulta !== undefined && consulta.pacienteInfo?.valorConsulta !== null
-                                                                    ? consulta.pacienteInfo.valorConsulta
-                                                                    : consulta.valor
-                                                                }
-                                                            </td>
-                                                            <td className="px-4 py-2 text-right">
+                                            ) : (
+                                                paginatedConsultas.map((consulta) => (
+                                                    <tr key={consulta.id}>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{consulta.paciente}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.data}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.horario}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.duracao} min</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                            <div className="flex gap-2">
                                                                 <Button
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    onClick={() => {
-                                                                        if (confirm("Tem certeza que deseja excluir esta consulta?")) {
-                                                                            excluirConsulta(consulta.id);
-                                                                        }
-                                                                    }}
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => handleEditConsultaClick(consulta)}
+                                                                    className="text-gray-600 hover:text-gray-900"
                                                                 >
-                                                                    Excluir
+                                                                    <Edit className="h-4 w-4" />
                                                                 </Button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                            </tbody>
-                                        </table>
-                                        {/* Pagination Controls */}
-                                        {totalPages > 1 && (
-                                            <div className="flex justify-center items-center gap-2 mt-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => handlePageChange(currentPage - 1)}
-                                                    disabled={currentPage === 1}
-                                                >
-                                                    <ChevronLeft className="h-4 w-4" />
-                                                </Button>
-                                                {Array.from({ length: totalPages }, (_, i) => (
-                                                    <Button
-                                                        key={i + 1}
-                                                        variant={currentPage === i + 1 ? "default" : "outline"}
-                                                        size="sm"
-                                                        onClick={() => handlePageChange(i + 1)}
-                                                    >
-                                                        {i + 1}
-                                                    </Button>
-                                                ))}
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => handlePageChange(currentPage + 1)}
-                                                    disabled={currentPage === totalPages}
-                                                >
-                                                    <ChevronRight className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        )}
+                                                                <Button
+                                                                    variant="ghost" // Use ghost for a discrete look
+                                                                    size="icon" // Make it a small icon button
+                                                                    onClick={() => excluirConsulta(consulta.id)}
+                                                                    className="text-gray-600 hover:text-gray-900" // Black icon, hover effect
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="flex justify-between items-center mt-4">
+                                        <Button
+                                            onClick={() => handlePageChange(currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            <ChevronLeft className="h-4 w-4 mr-2" /> Anterior
+                                        </Button>
+                                        <span>Página {currentPage} de {totalPages}</span>
+                                        <Button
+                                            onClick={() => handlePageChange(currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            Próxima <ChevronRight className="h-4 w-4 ml-2" />
+                                        </Button>
                                     </div>
-                                ) : (
-                                    <p className="text-center text-muted-foreground py-10">
-                                        Nenhuma consulta cadastrada ainda.
-                                    </p>
                                 )}
                             </CardContent>
                         </Card>
-
-                        <ModalNovaConsulta
-                            open={novaConsultaModalAberto}
-                            onOpenChange={setNovaConsultaModalAberto}
-                            pacientes={pacientes}
-                            pacienteSelecionado={pacienteSelecionado}
-                            setPacienteSelecionado={setPacienteSelecionado}
-                            dataConsulta={dataConsulta}
-                            setDataConsulta={setDataConsulta}
-                            horario={horario}
-                            setHorario={setHorario}
-                            duracao={duracao}
-                            setDuracao={setDuracao}
-                            criarConsulta={criarConsulta}
-                        />
                     </div>
                 </main>
             </div>
+
+            {/* Modal para Nova Consulta */}
+            <Dialog open={novaConsultaModalAberto} onOpenChange={setNovaConsultaModalAberto}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Agendar Nova Consulta</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="paciente">Paciente</Label>
+                            <Select
+                                value={pacienteSelecionado}
+                                onValueChange={setPacienteSelecionado}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione um paciente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {pacientes.map((paciente) => (
+                                        <SelectItem key={paciente.id} value={paciente.id}>
+                                            {paciente.nome}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="dataConsulta">Data</Label>
+                                <Input
+                                    id="dataConsulta"
+                                    type="date"
+                                    value={dataConsulta}
+                                    onChange={(e) => setDataConsulta(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="horario">Horário</Label>
+                                <Input
+                                    id="horario"
+                                    type="time"
+                                    value={horario}
+                                    onChange={(e) => setHorario(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="duracao">Duração (minutos)</Label>
+                            <Select
+                                value={duracao}
+                                onValueChange={setDuracao}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a duração" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="30">30 minutos</SelectItem>
+                                    <SelectItem value="45">45 minutos</SelectItem>
+                                    <SelectItem value="60">60 minutos</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setNovaConsultaModalAberto(false)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={criarConsulta}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            Agendar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal para Editar Consulta */}
+            <Dialog open={editarConsultaModalAberto} onOpenChange={setEditarConsultaModalAberto}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Consulta</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="editPaciente">Paciente</Label>
+                            <Select
+                                value={editPaciente}
+                                onValueChange={setEditPaciente}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione um paciente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {pacientes.map((paciente) => (
+                                        <SelectItem key={paciente.id} value={paciente.id}>
+                                            {paciente.nome}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="editData">Data</Label>
+                                <Input
+                                    id="editData"
+                                    type="date"
+                                    value={editData}
+                                    onChange={(e) => setEditData(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="editHorario">Horário</Label>
+                                <Input
+                                    id="editHorario"
+                                    type="time"
+                                    value={editHorario}
+                                    onChange={(e) => setEditHorario(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="editDuracao">Duração (minutos)</Label>
+                            <Select
+                                value={editDuracao}
+                                onValueChange={setEditDuracao}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a duração" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="30">30 minutos</SelectItem>
+                                    <SelectItem value="45">45 minutos</SelectItem>
+                                    <SelectItem value="60">60 minutos</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="editValor">Valor (R$)</Label>
+                            <Input
+                                id="editValor"
+                                type="number"
+                                value={editValor}
+                                onChange={(e) => setEditValor(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setEditarConsultaModalAberto(false)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={atualizarConsulta}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            Salvar Alterações
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
-// Funções auxiliares
-function diasNoMes(mes: number, ano: number) {
-    return new Date(ano, mes + 1, 0).getDate();
-}
-
-function primeiroDiaSemana(mes: number, ano: number) {
-    return new Date(ano, mes, 1).getDay(); // 0 = Domingo
-}
-
-// Ícone de Dinheiro
-function DollarIcon() {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4 text-muted-foreground"
-        >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
-            <path d="M12 18V6" />
-        </svg>
-    );
-}
-
-// Constantes de datas
-const meses = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-];
-
-const anos = [2023, 2024, 2025, 2026, 2027];
-
-const diasDaSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-// SidebarItem - botão de navegação lateral
-function SidebarItem({
-    href,
-    icon,
-    label,
-    pathname,
-}: {
-    href: string;
-    icon: React.ReactNode;
-    label: string;
-    pathname: string;
-}) {
-    const isActive = pathname === href || pathname.startsWith(`${href}/`);
+// Componentes auxiliares (mantidos do código anterior)
+function SidebarItem({ href, icon, label, pathname }: { href: string; icon: React.ReactNode; label: string; pathname: string }) {
+    const isActive = pathname === href;
     return (
         <Link
             href={href}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
-                isActive
-                    ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
-                    : "text-foreground hover:bg-muted"
-            }`}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary ${isActive ? "bg-muted text-primary" : ""}`}
         >
             {icon}
             {label}
@@ -679,71 +741,22 @@ function SidebarItem({
     );
 }
 
-// Modal de Nova Consulta
-function ModalNovaConsulta({
-    open,
-    onOpenChange,
-    pacientes,
-    pacienteSelecionado,
-    setPacienteSelecionado,
-    dataConsulta,
-    setDataConsulta,
-    horario,
-    setHorario,
-    duracao,
-    setDuracao,
-    criarConsulta,
-}: any) {
+function DollarIcon(props: any) {
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>Nova Consulta</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-col gap-4">
-                    <div className="grid grid-cols-1 gap-2">
-                        <Label>Paciente</Label>
-                        <Select value={pacienteSelecionado} onValueChange={setPacienteSelecionado}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione o paciente" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {pacientes.length > 0 ? (
-                                    pacientes.map((p: any) => (
-                                        <SelectItem key={p.id} value={p.id}>
-                                            {p.nome}
-                                        </SelectItem>
-                                    ))
-                                ) : (
-                                    <SelectItem value="nenhum" disabled>
-                                        Nenhum paciente encontrado
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <Label>Data</Label>
-                        <Input type="date" value={dataConsulta} onChange={(e) => setDataConsulta(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <Label>Horário</Label>
-                        <Input type="time" step="300" value={horario} onChange={(e) => setHorario(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <Label>Duração (min)</Label>
-                        <Input value={duracao} onChange={(e) => setDuracao(e.target.value)} placeholder="Ex: 30" />
-                    </div>
-                </div>
-                <DialogFooter className="mt-4">
-                    <Button
-                        onClick={criarConsulta}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white w-full"
-                    >
-                        Salvar Consulta
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <line x1="12" x2="12" y1="2" y2="22" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
     );
 }
