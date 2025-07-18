@@ -30,7 +30,6 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription, // Added this import
     DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -52,7 +51,6 @@ import {
     ChevronRight,
     Trash2,
     Edit,
-    Phone,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -64,19 +62,13 @@ type Consulta = {
     duracao: string
     valor: number
     status: string
-    pacienteInfo?: { // Explicitly define expected fields from patient
-        nome: string;
-        telefone?: string; // Assuming phone number might exist
-        email?: string; // Assuming email might exist
-    };
+    pacienteInfo?: any // This will hold the full patient object if found
 }
 
 type Paciente = {
     id: string;
     nome: string;
     valorConsulta?: number; // Optional, as it might come from default
-    telefone?: string; // Add telefone to Paciente type
-    email?: string;
 }
 
 export default function FinanceiroPage() {
@@ -88,6 +80,7 @@ export default function FinanceiroPage() {
         useState(false);
     const [pacienteSelecionado, setPacienteSelecionado] = useState("");
     const [dataConsulta, setDataConsulta] = useState("");
+    // New states for hour/minute selection
     const [newConsultaHora, setNewConsultaHora] = useState("");
     const [newConsultaMinuto, setNewConsultaMinuto] = useState("");
     const [duracao, setDuracao] = useState("30");
@@ -104,15 +97,11 @@ export default function FinanceiroPage() {
     const [consultaSendoEditada, setConsultaSendoEditada] = useState<Consulta | null>(null);
     const [editPacienteId, setEditPacienteId] = useState("");
     const [editData, setEditData] = useState("");
+    // New states for edit hour/minute selection
     const [editHora, setEditHora] = useState("");
     const [editMinuto, setEditMinuto] = useState("");
     const [editDuracao, setEditDuracao] = useState("");
-    const [editValor, setEditValor] = useState("");
-
-    // States para o modal de detalhes da consulta no calendário
-    const [detalhesConsultaModalAberto, setDetalhesConsultaModalAberto] = useState(false);
-    const [consultasDoDiaClicado, setConsultasDoDiaClicado] = useState<Consulta[]>([]);
-    const [diaClicadoCalendar, setDiaClicadoCalendar] = useState<string>("");
+    const [editValor, setEditValor] = useState(""); // This should be a string for input value
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -158,26 +147,16 @@ export default function FinanceiroPage() {
 
 
     const carregarPacientes = useCallback(async (id: string) => {
-        console.log("carregarPacientes: Iniciando para ID", id);
-        try {
-            const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
-            const snapshot = await getDocs(pacientesRef);
-            const listaPacientes = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            })) as Paciente[];
-            listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
-            setPacientes(listaPacientes);
-            console.log("carregarPacientes: Pacientes carregados:", listaPacientes.length);
-            return listaPacientes;
-        } catch (error) {
-            console.error("carregarPacientes: Erro ao carregar pacientes:", error);
-            return []; // Return empty array on error
-        }
+        const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
+        const snapshot = await getDocs(pacientesRef);
+        const listaPacientes = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Paciente[];
+        setPacientes(listaPacientes);
     }, []);
 
     const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
-        console.log("carregarConsultas: Iniciando para Nutricionista ID", nutricionistaId);
         try {
             const consultasRef = collection(db, "nutricionistas", nutricionistaId, "consultas");
             const snapshotConsultas = await getDocs(consultasRef);
@@ -185,25 +164,21 @@ export default function FinanceiroPage() {
             const nutricionistaDocRef = doc(db, "nutricionistas", nutricionistaId);
             const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
             const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
-            console.log("carregarConsultas: Valor padrão nutricionista:", valorPadraoNutricionista);
 
             const listaConsultasComValor = snapshotConsultas.docs.map((docConsulta) => {
                 const consultaData = docConsulta.data();
-                let valorConsulta = consultaData.valor;
+                let valorConsulta = consultaData.valor; // Prioritize saved value
 
-                const pacienteEncontrado = currentPacientes.find(
-                    (paciente) => paciente.nome === consultaData.paciente
-                );
-                console.log(`carregarConsultas: Processando consulta para ${consultaData.paciente}. Paciente encontrado:`, pacienteEncontrado ? pacienteEncontrado.nome : 'Não');
-
-
+                // If no value is saved, try to get from patientInfo or default
                 if (valorConsulta === undefined || valorConsulta === null) {
+                    const pacienteEncontrado = currentPacientes.find(
+                        (paciente) => paciente.nome === consultaData.paciente
+                    );
+
                     if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
                         valorConsulta = pacienteEncontrado.valorConsulta;
-                        console.log(`carregarConsultas: Usando valor do paciente para ${consultaData.paciente}:`, valorConsulta);
                     } else {
                         valorConsulta = valorPadraoNutricionista;
-                        console.log(`carregarConsultas: Usando valor padrão para ${consultaData.paciente}:`, valorConsulta);
                     }
                 }
 
@@ -211,93 +186,75 @@ export default function FinanceiroPage() {
                     id: docConsulta.id,
                     ...consultaData,
                     valor: valorConsulta,
-                    pacienteInfo: pacienteEncontrado
+                    pacienteInfo: currentPacientes.find(p => p.nome === consultaData.paciente) // Ensure patientInfo is updated
                 };
             }) as Consulta[];
 
-            const sortedConsultas = listaConsultasComValor.sort((a, b) => {
-                const dateA = new Date(a.data + "T" + a.horario).getTime();
-                const dateB = new Date(b.data + "T" + b.horario).getTime();
-                if (dateA !== dateB) {
-                    return dateA - dateB;
-                }
-                return 0;
-            });
-            setConsultas(sortedConsultas);
-            console.log("carregarConsultas: Consultas carregadas e estado atualizado:", sortedConsultas.length);
+            setConsultas(
+                listaConsultasComValor.sort((a, b) => {
+                    const dateA = new Date(a.data + "T" + a.horario).getTime();
+                    const dateB = new Date(b.data + "T" + b.horario).getTime();
+                    if (dateA !== dateB) {
+                        return dateA - dateB;
+                    }
+                    return 0; // Maintain original order if same date/time
+                })
+            );
         } catch (error) {
-            console.error("carregarConsultas: Erro ao carregar as consultas:", error);
+            console.error("Erro ao carregar as consultas:", error);
         }
     }, []);
 
     useEffect(() => {
         async function loadInitialData() {
-            console.log("useEffect: Iniciando loadInitialData");
-            if (!session?.user?.email) {
-                console.log("useEffect: Sessão de usuário não disponível.");
-                return;
-            }
+            if (!session?.user?.email) return;
             const userEmail = session.user.email;
-            console.log("useEffect: Email do usuário:", userEmail);
 
-            try {
-                const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
-                const nutricionista = nutricionistasSnap.docs.find(
-                    (doc) => doc.data().email === userEmail
-                );
-                if (nutricionista) {
-                    const id = nutricionista.id;
-                    setIdNutricionista(id);
-                    console.log("useEffect: Nutricionista encontrado com ID:", id);
-                    const loadedPacientes = await carregarPacientes(id);
-                    if (loadedPacientes) {
-                        console.log("useEffect: Pacientes carregados, agora carregando consultas...");
-                        await carregarConsultas(id, loadedPacientes);
-                    } else {
-                        console.log("useEffect: Nenhum paciente carregado.");
-                    }
-                } else {
-                    console.log("useEffect: Nenhum nutricionista encontrado para o email:", userEmail);
-                    setIdNutricionista(null); // Ensure idNutricionista is null if not found
-                    setPacientes([]); // Clear states if no nutritionist found
-                    setConsultas([]);
-                }
-            } catch (error) {
-                console.error("useEffect: Erro durante o carregamento inicial de dados:", error);
+            const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
+            const nutricionista = nutricionistasSnap.docs.find(
+                (doc) => doc.data().email === userEmail
+            );
+            if (nutricionista) {
+                const id = nutricionista.id;
+                setIdNutricionista(id);
+                const loadedPacientes = await carregarPacientes(id); // Ensure pacientes are loaded first
+                // No need to call carregarConsultas here, as the useEffect below handles it based on patients state
             }
         }
         loadInitialData();
-    }, [session, carregarPacientes, carregarConsultas]);
+    }, [session, carregarPacientes]);
+
+    // This useEffect ensures consultations are reloaded when patients change or on initial load
+    useEffect(() => {
+        if (idNutricionista && pacientes) { // Ensure idNutricionista is set and patients array is available
+            carregarConsultas(idNutricionista, pacientes);
+        }
+    }, [idNutricionista, pacientes, carregarConsultas]); // Reload consultations when patients data changes
+
 
     async function criarConsulta() {
-        console.log("criarConsulta: Tentando criar consulta...");
         const fullHorario = `${newConsultaHora}:${newConsultaMinuto}`;
         if (!pacienteSelecionado || !dataConsulta || !fullHorario || !idNutricionista) {
-            console.warn("criarConsulta: Campos obrigatórios ausentes:", { pacienteSelecionado, dataConsulta, fullHorario, idNutricionista });
             alert("Preencha todos os campos obrigatórios!");
             return;
         }
 
         const pacienteData = pacientes.find((p) => p.id === pacienteSelecionado);
-        if (!pacienteData) {
-             console.error("criarConsulta: Paciente não encontrado para o ID:", pacienteSelecionado);
-             alert("Paciente não encontrado. Selecione um paciente válido.");
-             return;
+        const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
+        const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
+        const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
+
+        let valorConsulta = valorPadraoNutricionista || 0;
+
+        if (pacienteData?.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
+            valorConsulta = pacienteData.valorConsulta;
         }
 
+        const pacienteNome = pacienteData?.nome || pacienteSelecionado;
+
         try {
-            const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
-            const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
-            const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
-            let valorConsulta = valorPadraoNutricionista || 0;
-
-            if (pacienteData.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
-                valorConsulta = pacienteData.valorConsulta;
-            }
-            console.log("criarConsulta: Valor da consulta a ser salva:", valorConsulta);
-
             await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
-                paciente: pacienteData.nome,
+                paciente: pacienteNome,
                 data: dataConsulta,
                 horario: fullHorario,
                 duracao,
@@ -307,151 +264,113 @@ export default function FinanceiroPage() {
 
             setPacienteSelecionado("");
             setDataConsulta("");
-            setNewConsultaHora("");
-            setNewConsultaMinuto("");
+            setNewConsultaHora(""); // Reset hour
+            setNewConsultaMinuto(""); // Reset minute
             setDuracao("30");
             setNovaConsultaModalAberto(false);
-            await carregarConsultas(idNutricionista, pacientes);
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta agendada com sucesso!");
-            console.log("criarConsulta: Consulta criada com sucesso e dados recarregados.");
         } catch (error) {
-            console.error("criarConsulta: Erro ao criar consulta:", error);
+            console.error("Erro ao criar consulta:", error);
             alert("Erro ao agendar consulta.");
         }
     }
 
     async function excluirConsulta(id: string) {
         if (!idNutricionista) return;
-        console.log("excluirConsulta: Tentando excluir consulta ID:", id);
         const confirm = window.confirm("Tem certeza que deseja excluir esta consulta?");
         if (!confirm) return;
         try {
             await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
-            await carregarConsultas(idNutricionista, pacientes);
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta excluída com sucesso!");
-            console.log("excluirConsulta: Consulta excluída e dados recarregados.");
         } catch (error) {
-            console.error("excluirConsulta: Erro ao excluir consulta:", error);
+            console.error("Erro ao excluir consulta:", error);
             alert("Erro ao excluir consulta.");
         }
     }
 
     async function handleEditConsultaClick(consulta: Consulta) {
-        console.log("handleEditConsultaClick: Editando consulta:", consulta.id);
         setConsultaSendoEditada(consulta);
         const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
         setEditPacienteId(foundPatient?.id || "");
-        console.log("handleEditConsultaClick: Paciente para edição:", foundPatient?.nome || "Não encontrado");
 
         setEditData(consulta.data);
+        // Split horario into hour and minute for separate selects
         const [hora, minuto] = consulta.horario.split(":");
         setEditHora(hora);
         setEditMinuto(minuto);
 
         setEditDuracao(consulta.duracao);
-        setEditValor(consulta.valor.toString());
+        setEditValor(consulta.valor.toString()); // Convert number to string for input value
         setEditarConsultaModalAberto(true);
     }
 
     async function atualizarConsulta() {
-        console.log("atualizarConsulta: Tentando atualizar consulta:", consultaSendoEditada?.id);
-        if (!consultaSendoEditada || !idNutricionista) {
-            console.warn("atualizarConsulta: Consulta ou ID do nutricionista ausente.");
-            return;
-        }
+        if (!consultaSendoEditada || !idNutricionista) return;
 
         const pacienteData = pacientes.find((p) => p.id === editPacienteId);
         const pacienteNome = pacienteData?.nome || "";
 
         if (!pacienteNome) {
-            console.error("atualizarConsulta: Paciente inválido selecionado para atualização.");
             alert("Paciente inválido selecionado.");
             return;
         }
 
         const fullHorario = `${editHora}:${editMinuto}`;
+
         const updatedData = {
             paciente: pacienteNome,
             data: editData,
             horario: fullHorario,
             duracao: editDuracao,
-            valor: parseFloat(editValor),
+            valor: parseFloat(editValor), // Convert string back to number
         };
-        console.log("atualizarConsulta: Dados a serem atualizados:", updatedData);
 
         try {
             await updateDoc(doc(db, "nutricionistas", idNutricionista, "consultas", consultaSendoEditada.id), updatedData);
             setEditarConsultaModalAberto(false);
-            await carregarConsultas(idNutricionista, pacientes);
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta atualizada com sucesso!");
-            console.log("atualizarConsulta: Consulta atualizada com sucesso e dados recarregados.");
         } catch (error) {
-            console.error("atualizarConsulta: Erro ao atualizar consulta:", error);
+            console.error("Erro ao atualizar consulta:", error);
             alert("Erro ao atualizar consulta.");
         }
     }
-
-    const handleDayClick = useCallback((day: number | null) => {
-        console.log("handleDayClick: Dia clicado:", day);
-        if (day === null) return;
-        const clickedDate = new Date(anoSelecionado, mesSelecionado, day);
-        const formattedClickedDate = clickedDate.toISOString().split('T')[0];
-        console.log("handleDayClick: Data formatada:", formattedClickedDate);
-    
-        const consultationsForThisDay = consultas.filter(consulta => {
-            console.log(`Comparando: ${consulta.data} com ${formattedClickedDate}`);
-            return consulta.data === formattedClickedDate;
-        }).sort((a, b) => a.horario.localeCompare(b.horario));
-        console.log("handleDayClick: Consultas para o dia:", consultationsForThisDay.length, consultationsForThisDay);
-    
-        if (consultationsForThisDay.length > 0) {
-            setConsultasDoDiaClicado(consultationsForThisDay);
-            setDiaClicadoCalendar(formatDate(formattedClickedDate));
-            setDetalhesConsultaModalAberto(true);
-            console.log("handleDayClick: Modal de detalhes aberto.");
-        } else {
-            console.log("handleDayClick: Nenhuma consulta para este dia.");
-        }
-    }, [consultas, anoSelecionado, mesSelecionado, formatDate]);
-
 
     const calcularReceita = useCallback((consultasFiltradas: Consulta[]) => {
         const total = consultasFiltradas.reduce(
             (acc, consulta) => acc + Number(consulta.valor || 0),
             0
         );
-        console.log("calcularReceita: Total para consultas filtradas:", total);
         return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
     }, []);
 
     const calcularReceitaDaSemana = useCallback(() => {
         const hoje = new Date();
         const inicioDaSemana = new Date(hoje);
-        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay());
+        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay()); // Sunday
         inicioDaSemana.setHours(0, 0, 0, 0);
 
         const fimDaSemana = new Date(inicioDaSemana);
-        fimDaSemana.setDate(inicioDaSemana.getDate() + 6);
+        fimDaSemana.setDate(inicioDaSemana.getDate() + 6); // Saturday
         fimDaSemana.setHours(23, 59, 59, 999);
 
         const consultasDaSemana = consultas.filter((consulta) => {
             const dataConsulta = new Date(consulta.data + "T00:00:00");
             return dataConsulta >= inicioDaSemana && dataConsulta <= fimDaSemana;
         });
-        console.log("calcularReceitaDaSemana: Consultas da semana:", consultasDaSemana.length);
         return calcularReceita(consultasDaSemana);
     }, [consultas, calcularReceita]);
 
     const consultasDoMesSelecionado = useCallback(() => {
-        const filtered = consultas.filter((consulta) => {
+        return consultas.filter((consulta) => {
             const data = new Date(consulta.data + "T00:00:00");
             return (
                 data.getMonth() === mesSelecionado &&
                 data.getFullYear() === anoSelecionado
             );
         });
-        console.log("consultasDoMesSelecionado: Consultas do mês:", filtered.length);
-        return filtered;
     }, [consultas, mesSelecionado, anoSelecionado]);
 
     const meses = useMemo(() => [
@@ -487,23 +406,16 @@ export default function FinanceiroPage() {
         for (let i = 1; i <= numDias; i++) {
             diasArray.push(i);
         }
-        console.log("getDiasDoMes: Dias gerados para o mês:", diasArray.length);
         return diasArray;
     }, [mesSelecionado, anoSelecionado, diasNoMes, primeiroDiaSemana]);
 
     const getConsultasDoDia = useCallback((dia: number | null) => {
         if (dia === null) return [];
-        const currentMonthPadded = String(mesSelecionado + 1).padStart(2, '0');
-        const currentDayPadded = String(dia).padStart(2, '0');
-        const dateString = `${anoSelecionado}-${currentMonthPadded}-${currentDayPadded}`;
-        console.log(`getConsultasDoDia: Buscando consultas para ${dateString}`);
-
-        const dailyConsultas = consultas.filter(consulta => {
-            return consulta.data === dateString;
+        return consultasDoMesSelecionado().filter(consulta => {
+            const data = new Date(consulta.data + "T00:00:00");
+            return data.getDate() === dia;
         }).sort((a, b) => a.horario.localeCompare(b.horario));
-        console.log(`getConsultasDoDia: Encontradas ${dailyConsultas.length} consultas para ${dateString}`);
-        return dailyConsultas;
-    }, [consultas, mesSelecionado, anoSelecionado]);
+    }, [consultasDoMesSelecionado]);
 
 
     // Pagination logic
@@ -511,12 +423,9 @@ export default function FinanceiroPage() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedConsultas = consultas.slice(startIndex, endIndex);
-    console.log("Render: totalConsultas", consultas.length, "paginatedConsultas", paginatedConsultas.length);
-
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
-        console.log("handlePageChange: Mudando para página", page);
     };
 
     return (
@@ -689,15 +598,14 @@ export default function FinanceiroPage() {
                                                     ${hasConsultas && !isCurrentDay ? "border-2 border-indigo-600 font-medium" : ""}
                                                     ${hasConsultas && isCurrentDay ? "border-2 border-indigo-800 dark:border-indigo-400" : ""}
                                                 `}
-                                                onClick={() => handleDayClick(dia)}
                                             >
                                                 <span className="font-semibold text-base">{dia}</span>
                                                 {hasConsultas && (
-                                                    <div className="mt-1 w-full text-xs text-left px-1 max-h-[50px] overflow-hidden">
+                                                    <div className="mt-1 w-full text-xs text-left px-1 max-h-[50px] overflow-hidden"> {/* Added max-h and overflow */}
                                                         {consultasDoDia.map((c, i) => {
-                                                            const firstName = c.paciente.split(' ')[0];
+                                                            const firstName = c.paciente.split(' ')[0]; // Get first name
                                                             return (
-                                                                <div key={i} className="truncate leading-tight">
+                                                                <div key={i} className="truncate leading-tight"> {/* leading-tight to reduce line height */}
                                                                     <span className="font-medium">{c.horario}</span> - {firstName}
                                                                 </div>
                                                             );
@@ -799,7 +707,7 @@ export default function FinanceiroPage() {
 
             {/* Modal para Nova Consulta */}
             <Dialog open={novaConsultaModalAberto} onOpenChange={setNovaConsultaModalAberto}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Agendar Nova Consulta</DialogTitle>
                     </DialogHeader>
@@ -813,7 +721,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione um paciente" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-60 overflow-y-auto">
+                                <SelectContent>
                                     {pacientes.map((paciente) => (
                                         <SelectItem key={paciente.id} value={paciente.id}>
                                             {paciente.nome}
@@ -832,7 +740,7 @@ export default function FinanceiroPage() {
                                     onChange={(e) => setDataConsulta(e.target.value)}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2"> {/* Nested grid for Hora/Minuto */}
                                 <div className="grid gap-2">
                                     <Label htmlFor="newConsultaHora">Hora</Label>
                                     <Select
@@ -842,7 +750,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="HH" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto">
+                                        <SelectContent>
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} value={hour}>
                                                     {hour}
@@ -860,7 +768,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="MM" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto">
+                                        <SelectContent>
                                             {minuteOptions.map((minute) => (
                                                 <SelectItem key={minute} value={minute}>
                                                     {minute}
@@ -880,7 +788,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione a duração" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-48 overflow-y-auto">
+                                <SelectContent>
                                     <SelectItem value="30">30 minutos</SelectItem>
                                     <SelectItem value="45">45 minutos</SelectItem>
                                     <SelectItem value="60">60 minutos</SelectItem>
@@ -911,7 +819,7 @@ export default function FinanceiroPage() {
 
             {/* Modal para Editar Consulta */}
             <Dialog open={editarConsultaModalAberto} onOpenChange={setEditarConsultaModalAberto}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Editar Consulta</DialogTitle>
                     </DialogHeader>
@@ -925,7 +833,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione um paciente" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-60 overflow-y-auto">
+                                <SelectContent>
                                     {pacientes.map((paciente) => (
                                         <SelectItem key={paciente.id} value={paciente.id}>
                                             {paciente.nome}
@@ -944,7 +852,7 @@ export default function FinanceiroPage() {
                                     onChange={(e) => setEditData(e.target.value)}
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2"> {/* Nested grid for Hora/Minuto */}
                                 <div className="grid gap-2">
                                     <Label htmlFor="editHora">Hora</Label>
                                     <Select
@@ -954,7 +862,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="HH" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto">
+                                        <SelectContent>
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} value={hour}>
                                                     {hour}
@@ -972,7 +880,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="MM" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto">
+                                        <SelectContent>
                                             {minuteOptions.map((minute) => (
                                                 <SelectItem key={minute} value={minute}>
                                                     {minute}
@@ -992,7 +900,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione a duração" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-48 overflow-y-auto">
+                                <SelectContent>
                                     <SelectItem value="30">30 minutos</SelectItem>
                                     <SelectItem value="45">45 minutos</SelectItem>
                                     <SelectItem value="60">60 minutos</SelectItem>
@@ -1026,68 +934,6 @@ export default function FinanceiroPage() {
                         >
                             Salvar Alterações
                         </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Modal para Detalhes da Consulta (ao clicar no dia do calendário) */}
-            <Dialog open={detalhesConsultaModalAberto} onOpenChange={setDetalhesConsultaModalAberto}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Consultas em {diaClicadoCalendar}</DialogTitle>
-                        <DialogDescription>
-                            Detalhes das consultas agendadas para este dia.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
-                        {consultasDoDiaClicado.length === 0 ? (
-                            <p className="text-muted-foreground">Nenhuma consulta agendada para este dia.</p>
-                        ) : (
-                            consultasDoDiaClicado.map((consulta) => (
-                                <Card key={consulta.id} className="p-4 flex flex-col gap-2 border border-gray-200 dark:border-gray-700">
-                                    <div className="flex justify-between items-center">
-                                        <h4 className="font-semibold text-lg">{consulta.paciente}</h4>
-                                        <span className="text-sm text-muted-foreground">{consulta.horario}</span>
-                                    </div>
-                                    {consulta.pacienteInfo?.telefone && (
-                                        <div className="flex items-center text-sm text-muted-foreground">
-                                            <Phone className="h-4 w-4 mr-2" />
-                                            {consulta.pacienteInfo.telefone}
-                                        </div>
-                                    )}
-                                    {consulta.valor && (
-                                        <div className="text-sm text-muted-foreground">
-                                            Valor: R$ {consulta.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                        </div>
-                                    )}
-                                    <div className="flex justify-end gap-2 mt-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                setDetalhesConsultaModalAberto(false);
-                                                handleEditConsultaClick(consulta);
-                                            }}
-                                        >
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => {
-                                                setDetalhesConsultaModalAberto(false);
-                                                excluirConsulta(consulta.id);
-                                            }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                </Card>
-                            ))
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button onClick={() => setDetalhesConsultaModalAberto(false)}>Fechar</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
