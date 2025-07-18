@@ -104,6 +104,11 @@ export default function FinanceiroPage() {
     const [editValor, setEditValor] = useState("");
     // This should be a string for input value
 
+    // New states for calendar day click modal
+    const [consultasDoDiaModalAberto, setConsultasDoDiaModalAberto] = useState(false);
+    const [consultasDoDiaSelecionado, setConsultasDoDiaSelecionado] = useState<Consulta[]>([]);
+    const [diaClicadoNoCalendario, setDiaClicadoNoCalendario] = useState<number | null>(null);
+
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -221,20 +226,28 @@ export default function FinanceiroPage() {
             if (nutricionista) {
                 const id = nutricionista.id;
                 setIdNutricionista(id);
-                const loadedPacientes = await carregarPacientes(id); // Ensure pacientes are loaded first
-             
-                // No need to call carregarConsultas here, as the useEffect below handles it based on patients state
+                // Load patients first, then consultations once patients are available
+                await carregarPacientes(id);
             }
         }
         loadInitialData();
     }, [session, carregarPacientes]);
+    
     // This useEffect ensures consultations are reloaded when patients change or on initial load
     useEffect(() => {
-        if (idNutricionista && pacientes) { // Ensure idNutricionista is set and patients array is available
+        if (idNutricionista && pacientes.length > 0) { // Ensure idNutricionista is set and patients array is available and not empty
             carregarConsultas(idNutricionista, pacientes);
+        } else if (idNutricionista && pacientes.length === 0) {
+            // If patients array is empty, but idNutricionista is set,
+            // we should still try to load consultations in case they don't have linked patients yet
+            // or if we're dealing with a new nutritionist with no patients yet.
+            // However, the find logic for pacienteInfo might not work as expected.
+            // This is a design decision. For now, we rely on `pacientes.length > 0` to ensure patient data is ready.
+            // If you want to load consultations even with no patients, remove `pacientes.length > 0`
+            // and adjust `carregarConsultas` to handle potentially empty `currentPacientes` array.
+            carregarConsultas(idNutricionista, pacientes); // Still try to load, even if no patients found
         }
     }, [idNutricionista, pacientes, carregarConsultas]);
-    // Reload consultations when patients data changes
 
 
     async function criarConsulta() {
@@ -245,27 +258,31 @@ export default function FinanceiroPage() {
         }
 
         const pacienteData = pacientes.find((p) => p.id === pacienteSelecionado);
+        // Bug Fix Consideration: If pacienteData is undefined, it means the selected patient ID
+        // does not match any loaded patient. This should ideally not happen if selection is from dropdown.
+        // But if `pacientes` state is not fully loaded, this could be an issue.
+        // Ensure dropdown is disabled/empty until `pacientes` is loaded.
+
         const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
         const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
         const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
 
-        let valorConsulta = valorPadraoNutricionista ||
-            0;
+        let valorConsulta = valorPadraoNutricionista || 0;
 
         if (pacienteData?.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
             valorConsulta = pacienteData.valorConsulta;
         }
 
-        const pacienteNome = pacienteData?.nome || pacienteSelecionado;
+        const pacienteNome = pacienteData?.nome || "Paciente Não Encontrado"; // Fallback name
         try {
             await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
-                paciente: pacienteNome,
+                paciente: pacienteNome, // Store name, but ideally use patient ID for robust linking
                 data: dataConsulta,
                 horario: fullHorario,
                 duracao,
-               
                 valor: valorConsulta,
                 status: "Agendada",
+                // Consider adding patientId: pacienteSelecionado here for robust linking
             });
             setPacienteSelecionado("");
             setDataConsulta("");
@@ -274,8 +291,8 @@ export default function FinanceiroPage() {
             // Reset minute
             setDuracao("30");
             setNovaConsultaModalAberto(false);
+            setConsultasDoDiaModalAberto(false); // Close if opened from calendar day
             await carregarConsultas(idNutricionista, pacientes);
-            // Re-fetch to update counters and table
             alert("Consulta agendada com sucesso!");
         } catch (error) {
             console.error("Erro ao criar consulta:", error);
@@ -290,6 +307,13 @@ export default function FinanceiroPage() {
         try {
             await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
             await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
+
+            // Update consultasDoDiaSelecionado if this modal is open
+            setConsultasDoDiaSelecionado(prev => prev.filter(c => c.id !== id));
+            if (consultasDoDiaSelecionado.length === 1 && consultasDoDiaSelecionado[0].id === id) {
+                // If this was the last consultation, close the modal
+                setConsultasDoDiaModalAberto(false);
+            }
             alert("Consulta excluída com sucesso!");
         } catch (error) {
             console.error("Erro ao excluir consulta:", error);
@@ -300,7 +324,7 @@ export default function FinanceiroPage() {
     async function handleEditConsultaClick(consulta: Consulta) {
         setConsultaSendoEditada(consulta);
         const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
-        setEditPacienteId(foundPatient?.id || "");
+        setEditPacienteId(foundPatient?.id || ""); // Populate editPacienteId with patient's ID
 
         setEditData(consulta.data);
         // Split horario into hour and minute for separate selects
@@ -311,6 +335,7 @@ export default function FinanceiroPage() {
         setEditDuracao(consulta.duracao);
         setEditValor(consulta.valor.toString()); // Convert number to string for input value
         setEditarConsultaModalAberto(true);
+        setConsultasDoDiaModalAberto(false); // Close the day's consultations modal
     }
 
     async function atualizarConsulta() {
@@ -324,7 +349,7 @@ export default function FinanceiroPage() {
 
         const fullHorario = `${editHora}:${editMinuto}`;
         const updatedData = {
-            paciente: pacienteNome,
+            paciente: pacienteNome, // Update with new patient name if changed
             data: editData,
             horario: fullHorario,
             duracao: editDuracao,
@@ -341,17 +366,25 @@ export default function FinanceiroPage() {
         }
     }
 
-    // New function to handle clicks on calendar days
+    // Function to handle clicks on calendar days
     const handleDayClick = (day: number | null) => {
         if (day === null) return;
         
-        // Format the clicked day's date to YYYY-MM-DD
+        setDiaClicadoNoCalendario(day);
+        const consultasForClickedDay = getConsultasDoDia(day);
+        setConsultasDoDiaSelecionado(consultasForClickedDay);
+        setConsultasDoDiaModalAberto(true);
+    };
+
+    // Function to open new consultation modal from the day's consultations modal
+    const openNewConsultationFromDayModal = () => {
         const year = anoSelecionado;
         const month = String(mesSelecionado + 1).padStart(2, '0'); // Months are 0-indexed
-        const dayFormatted = String(day).padStart(2, '0');
+        const dayFormatted = String(diaClicadoNoCalendario).padStart(2, '0');
         const selectedDate = `${year}-${month}-${dayFormatted}`;
 
-        setDataConsulta(selectedDate); // Pre-fill the date for the new consultation modal
+        setDataConsulta(selectedDate); // Pre-fill the date
+        setConsultasDoDiaModalAberto(false); // Close the day's consultations modal
         setNovaConsultaModalAberto(true); // Open the new consultation modal
     };
 
@@ -834,7 +867,7 @@ export default function FinanceiroPage() {
                                     <SelectValue placeholder="Selecione 
                                     um paciente" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                   
                                     {pacientes.map((paciente) => (
                                         <SelectItem key={paciente.id} value={paciente.id}>
@@ -874,7 +907,7 @@ export default function FinanceiroPage() {
                                             <SelectValue placeholder="HH" />
                                         </SelectTrigger>
                                     
-                                        <SelectContent>
+                                        <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} 
                                                 value={hour}>
@@ -899,7 +932,7 @@ export default function FinanceiroPage() {
                                             <SelectValue placeholder="MM" />
                                        
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                             {minuteOptions.map((minute) => (
              
                                                 <SelectItem key={minute} value={minute}>
@@ -982,7 +1015,7 @@ export default function FinanceiroPage() {
                                     <SelectValue placeholder="Selecione um paciente" />
                              
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                     {pacientes.map((paciente) => (
                            
                                         <SelectItem key={paciente.id} value={paciente.id}>
@@ -1021,8 +1054,7 @@ export default function FinanceiroPage() {
                                             <SelectValue placeholder="HH" />
        
                                         </SelectTrigger>
-                                        <SelectContent>
-                           
+                                        <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} value={hour}>
                                
@@ -1047,7 +1079,7 @@ export default function FinanceiroPage() {
                                             <SelectValue placeholder="MM" />
                                         </SelectTrigger>
                               
-                                        <SelectContent>
+                                        <SelectContent className="max-h-60 overflow-y-auto"> {/* ADDED: Max height and overflow */}
                                             {minuteOptions.map((minute) => (
                                             
                                                 <SelectItem key={minute} value={minute}>
@@ -1119,6 +1151,70 @@ export default function FinanceiroPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* New: Modal for day's consultations */}
+            <Dialog open={consultasDoDiaModalAberto} onOpenChange={setConsultasDoDiaModalAberto}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {diaClicadoNoCalendario !== null ? 
+                                `Consultas para ${diaClicadoNoCalendario} de ${meses[mesSelecionado]}` :
+                                "Consultas do Dia"
+                            }
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 max-h-[400px] overflow-y-auto"> {/* Added max-height and overflow */}
+                        {consultasDoDiaSelecionado.length === 0 ? (
+                            <p className="text-center text-muted-foreground">Nenhuma consulta agendada para este dia.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {consultasDoDiaSelecionado.map((consulta) => (
+                                    <Card key={consulta.id} className="p-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold">{consulta.horario} - {consulta.paciente}</p>
+                                            <p className="text-sm text-muted-foreground">Duração: {consulta.duracao} min | Valor: R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleEditConsultaClick(consulta)}
+                                                className="text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+                                            >
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => excluirConsulta(consulta.id)}
+                                                className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setConsultasDoDiaModalAberto(false)}
+                        >
+                            Fechar
+                        </Button>
+                        <Button
+                            onClick={openNewConsultationFromDayModal}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Agendar Nova Consulta
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }
