@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react"; // Added useMemo and useCallback for potential optimization
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -40,7 +40,7 @@ import {
     SelectItem,
 } from "@/components/ui/select";
 import {
-    Calendar as CalendarIcon, // Renamed to avoid conflict with the component
+    Calendar as CalendarIcon,
     FileText,
     Home,
     LineChart,
@@ -56,19 +56,25 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 type Consulta = {
     id: string
-    paciente: string
-    data: string
-    horario: string
+    paciente: string // This will be the patient's name
+    data: string // YYYY-MM-DD
+    horario: string // HH:MM
     duracao: string
     valor: number
     status: string
-    pacienteInfo?: any
+    pacienteInfo?: any // This will hold the full patient object if found
+}
+
+type Paciente = {
+    id: string;
+    nome: string;
+    valorConsulta?: number; // Optional, as it might come from default
 }
 
 export default function FinanceiroPage() {
     const pathname = usePathname();
-    const [consultas, setConsultas] = useState<any[]>([]);
-    const [pacientes, setPacientes] = useState<any[]>([]);
+    const [consultas, setConsultas] = useState<Consulta[]>([]);
+    const [pacientes, setPacientes] = useState<Paciente[]>([]);
     const { data: session } = useSession();
     const [novaConsultaModalAberto, setNovaConsultaModalAberto] =
         useState(false);
@@ -87,7 +93,7 @@ export default function FinanceiroPage() {
     // States para o modal de edição
     const [editarConsultaModalAberto, setEditarConsultaModalAberto] = useState(false);
     const [consultaSendoEditada, setConsultaSendoEditada] = useState<Consulta | null>(null);
-    const [editPaciente, setEditPaciente] = useState("");
+    const [editPacienteId, setEditPacienteId] = useState(""); // Stores patient ID for select
     const [editData, setEditData] = useState("");
     const [editHorario, setEditHorario] = useState("");
     const [editDuracao, setEditDuracao] = useState("");
@@ -102,8 +108,98 @@ export default function FinanceiroPage() {
     const mesAtual = dataAtual.getMonth();
     const anoAtual = dataAtual.getFullYear();
 
+    // Helper to format date
+    const formatDate = (dateString: string) => {
+        if (!dateString) return "";
+        try {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        } catch (error) {
+            console.error("Error formatting date:", dateString, error);
+            return dateString; // Return original if format fails
+        }
+    };
+
+    // Helper to generate time options for select
+    const generateTimeOptions = () => {
+        const times = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 5) { // Increment by 5 minutes
+                const hour = String(h).padStart(2, '0');
+                const minute = String(m).padStart(2, '0');
+                times.push(`${hour}:${minute}`);
+            }
+        }
+        return times;
+    };
+
+    const timeOptions = useMemo(generateTimeOptions, []); // Memoize time options
+
+
+    // Use useCallback for fetchData and carregarConsultas to prevent unnecessary re-renders
+    const carregarPacientes = useCallback(async (id: string) => {
+        const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
+        const snapshot = await getDocs(pacientesRef);
+        const listaPacientes = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as Paciente[];
+        setPacientes(listaPacientes);
+    }, []);
+
+    const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
+        try {
+            const consultasRef = collection(db, "nutricionistas", nutricionistaId, "consultas");
+            const snapshotConsultas = await getDocs(consultasRef);
+
+            const nutricionistaDocRef = doc(db, "nutricionistas", nutricionistaId);
+            const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
+            const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
+
+            const listaConsultasComValor = snapshotConsultas.docs.map((docConsulta) => {
+                const consultaData = docConsulta.data();
+                let valorConsulta = valorPadraoNutricionista;
+
+                // Find patient information within the passed 'currentPacientes'
+                const pacienteEncontrado = currentPacientes.find(
+                    (paciente) => paciente.nome === consultaData.paciente
+                );
+
+                if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
+                    valorConsulta = pacienteEncontrado.valorConsulta;
+                }
+
+                return { id: docConsulta.id, ...consultaData, valor: valorConsulta, pacienteInfo: pacienteEncontrado };
+            }) as Consulta[];
+
+            setConsultas(
+                listaConsultasComValor.sort((a, b) => {
+                    // Sort by date, then by whether valorConsulta is explicitly set
+                    const dateA = new Date(a.data + "T" + a.horario).getTime(); // Use time for accurate sort
+                    const dateB = new Date(b.data + "T" + b.horario).getTime(); // Use time for accurate sort
+                    if (dateA !== dateB) {
+                        return dateA - dateB;
+                    }
+
+                    const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
+                    const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
+
+                    if (hasValorA && !hasValorB) {
+                        return -1;
+                    }
+                    if (!hasValorA && hasValorB) {
+                        return 1;
+                    }
+                    return 0;
+                })
+            );
+        } catch (error) {
+            console.error("Erro ao carregar as consultas:", error);
+        }
+    }, []); // Empty dependency array, as currentPacientes is passed as an argument
+
     useEffect(() => {
-        async function fetchData() {
+        async function loadInitialData() {
             if (!session?.user?.email) return;
             const userEmail = session.user.email;
 
@@ -114,76 +210,23 @@ export default function FinanceiroPage() {
             if (nutricionista) {
                 const id = nutricionista.id;
                 setIdNutricionista(id);
+                // Load patients first, then use their loaded state to load consultations
                 await carregarPacientes(id);
-                await carregarConsultas(id);
             }
         }
-        fetchData();
-    }, [session, pacientes]); // Added pacientes to dependency array for correct patient info loading
+        loadInitialData();
+    }, [session, carregarPacientes]); // Depend on session and carregarPacientes
 
-    async function carregarPacientes(id: string) {
-        const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
-        const snapshot = await getDocs(pacientesRef);
-        const listaPacientes = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
-        setPacientes(listaPacientes);
-    }
-
-    async function carregarConsultas(idNutricionista: string) {
-        try {
-            const consultasRef = collection(db, "nutricionistas", idNutricionista, "consultas");
-            const snapshotConsultas = await getDocs(consultasRef);
-
-            const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
-            const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
-            const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
-
-            const listaConsultasComValor = await Promise.all(
-                snapshotConsultas.docs.map(async (docConsulta) => {
-                    const consultaData = docConsulta.data();
-                    let valorConsulta = valorPadraoNutricionista;
-
-                    // Find patient information within the already loaded 'pacientes' state
-                    const pacienteEncontrado = pacientes.find(
-                        (paciente) => paciente.nome === consultaData.paciente
-                    );
-
-                    if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
-                        valorConsulta = pacienteEncontrado.valorConsulta;
-                    }
-
-                    return { id: docConsulta.id, ...consultaData, valor: valorConsulta, pacienteInfo: pacienteEncontrado };
-                })
-            );
-
-            setConsultas(
-                listaConsultasComValor.sort((a, b) => {
-                    const dataA = new Date(b.data).getTime();
-                    const dataB = new Date(a.data).getTime();
-                    if (dataA !== dataB) {
-                        return dataA - dataB;
-                    }
-
-                    // Sort by whether valorConsulta is explicitly set in pacienteInfo
-                    const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
-                    const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
-
-                    if (hasValorA && !hasValorB) {
-                        return -1; // a comes before b if a has explicit valor and b doesn't
-                    }
-                    if (!hasValorA && hasValorB) {
-                        return 1; // b comes before a if b has explicit valor and a doesn't
-                    }
-
-                    return 0; // Maintain original order if both or neither have explicit valor
-                })
-            );
-        } catch (error) {
-            console.error("Erro ao carregar as consultas:", error);
+    // This useEffect ensures consultations are reloaded when patients change or on initial load
+    useEffect(() => {
+        if (idNutricionista && pacientes.length > 0) { // Ensure patients are loaded before trying to load consultations that depend on them
+            carregarConsultas(idNutricionista, pacientes);
+        } else if (idNutricionista && pacientes.length === 0 && consultas.length === 0) {
+            // Handle case where there might be no patients yet but we still want to load consultations
+            // or if patients load after consultations were attempted once without patients.
+            carregarConsultas(idNutricionista, []); // Pass an empty array if no patients
         }
-    }
+    }, [idNutricionista, pacientes, carregarConsultas]); // Reload consultations when patients data changes
 
     async function criarConsulta() {
         if (!pacienteSelecionado || !dataConsulta || !horario || !idNutricionista) {
@@ -204,35 +247,48 @@ export default function FinanceiroPage() {
 
         const pacienteNome = pacienteData?.nome || pacienteSelecionado;
 
-        await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
-            paciente: pacienteNome,
-            data: dataConsulta,
-            horario,
-            duracao,
-            valor: valorConsulta,
-            status: "Agendada",
-        });
+        try {
+            await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
+                paciente: pacienteNome,
+                data: dataConsulta,
+                horario,
+                duracao,
+                valor: valorConsulta,
+                status: "Agendada",
+            });
 
-        setPacienteSelecionado("");
-        setDataConsulta("");
-        setHorario("");
-        setDuracao("30");
-        setNovaConsultaModalAberto(false);
-        await carregarConsultas(idNutricionista);
+            setPacienteSelecionado("");
+            setDataConsulta("");
+            setHorario("");
+            setDuracao("30");
+            setNovaConsultaModalAberto(false);
+            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
+            alert("Consulta agendada com sucesso!");
+        } catch (error) {
+            console.error("Erro ao criar consulta:", error);
+            alert("Erro ao agendar consulta.");
+        }
     }
 
     async function excluirConsulta(id: string) {
         if (!idNutricionista) return;
         const confirm = window.confirm("Tem certeza que deseja excluir esta consulta?");
         if (!confirm) return;
-        await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
-        await carregarConsultas(idNutricionista);
+        try {
+            await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
+            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
+            alert("Consulta excluída com sucesso!");
+        } catch (error) {
+            console.error("Erro ao excluir consulta:", error);
+            alert("Erro ao excluir consulta.");
+        }
     }
 
     async function handleEditConsultaClick(consulta: Consulta) {
         setConsultaSendoEditada(consulta);
-        // Ensure that editPaciente is the ID if available, otherwise the name
-        setEditPaciente(pacientes.find(p => p.nome === consulta.paciente)?.id || consulta.paciente);
+        // Find the patient ID based on the patient's name stored in the consultation
+        const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
+        setEditPacienteId(foundPatient?.id || ""); // Set ID for the select input
         setEditData(consulta.data);
         setEditHorario(consulta.horario);
         setEditDuracao(consulta.duracao);
@@ -243,11 +299,16 @@ export default function FinanceiroPage() {
     async function atualizarConsulta() {
         if (!consultaSendoEditada || !idNutricionista) return;
 
-        const pacienteData = pacientes.find((p) => p.id === editPaciente);
-        const pacienteNome = pacienteData?.nome || editPaciente; // Use ID to find the patient, then get the name
+        const pacienteData = pacientes.find((p) => p.id === editPacienteId);
+        const pacienteNome = pacienteData?.nome || ""; // Get name from ID
+
+        if (!pacienteNome) {
+            alert("Paciente inválido selecionado.");
+            return;
+        }
 
         const updatedData = {
-            paciente: pacienteNome, // Store the name, not the ID
+            paciente: pacienteNome,
             data: editData,
             horario: editHorario,
             duracao: editDuracao,
@@ -257,7 +318,7 @@ export default function FinanceiroPage() {
         try {
             await updateDoc(doc(db, "nutricionistas", idNutricionista, "consultas", consultaSendoEditada.id), updatedData);
             setEditarConsultaModalAberto(false);
-            await carregarConsultas(idNutricionista);
+            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
             alert("Consulta atualizada com sucesso!");
         } catch (error) {
             console.error("Erro ao atualizar consulta:", error);
@@ -265,15 +326,15 @@ export default function FinanceiroPage() {
         }
     }
 
-    function calcularReceita(consultasFiltradas: any[]) {
+    const calcularReceita = useCallback((consultasFiltradas: Consulta[]) => {
         const total = consultasFiltradas.reduce(
             (acc, consulta) => acc + Number(consulta.valor || 0),
             0
         );
         return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    }
+    }, []); // Empty dependency array as it only depends on its input
 
-    function calcularReceitaDaSemana() {
+    const calcularReceitaDaSemana = useCallback(() => {
         const hoje = new Date();
         const inicioDaSemana = new Date(hoje);
         inicioDaSemana.setDate(hoje.getDate() - hoje.getDay()); // Sunday
@@ -284,77 +345,66 @@ export default function FinanceiroPage() {
         fimDaSemana.setHours(23, 59, 59, 999);
 
         const consultasDaSemana = consultas.filter((consulta) => {
-            const dataConsulta = new Date(consulta.data + "T00:00:00"); // Add T00:00:00 to avoid timezone issues
+            const dataConsulta = new Date(consulta.data + "T00:00:00");
             return dataConsulta >= inicioDaSemana && dataConsulta <= fimDaSemana;
         });
         return calcularReceita(consultasDaSemana);
-    }
+    }, [consultas, calcularReceita]); // Depend on 'consultas' and 'calcularReceita'
 
-    function consultasDoMesSelecionado() {
+    const consultasDoMesSelecionado = useCallback(() => {
         return consultas.filter((consulta) => {
-            const data = new Date(consulta.data + "T00:00:00"); // Add T00:00:00
+            const data = new Date(consulta.data + "T00:00:00");
             return (
                 data.getMonth() === mesSelecionado &&
                 data.getFullYear() === anoSelecionado
             );
         });
-    }
+    }, [consultas, mesSelecionado, anoSelecionado]); // Depend on 'consultas', 'mesSelecionado', 'anoSelecionado'
 
-    const meses = [
-        "Janeiro",
-        "Fevereiro",
-        "Março",
-        "Abril",
-        "Maio",
-        "Junho",
-        "Julho",
-        "Agosto",
-        "Setembro",
-        "Outubro",
-        "Novembro",
-        "Dezembro",
-    ];
+    const meses = useMemo(() => [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+    ], []);
 
-    const anos = [2023, 2024, 2025, 2026, 2027];
+    const anos = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        return Array.from({ length: 5 }, (_, i) => currentYear + i);
+    }, []);
 
-    function diasNoMes(mes: number, ano: number) {
+    const diasNoMes = useCallback((mes: number, ano: number) => {
         return new Date(ano, mes + 1, 0).getDate();
-    }
+    }, []);
 
-    function primeiroDiaSemana(mes: number, ano: number) {
-        // getDay() returns 0 for Sunday, 1 for Monday, etc.
-        // We want it to align with our grid (0 for Sunday)
-        return new Date(ano, mes, 1).getDay();
-    }
+    const primeiroDiaSemana = useCallback((mes: number, ano: number) => {
+        return new Date(ano, mes, 1).getDay(); // 0=Dom, 1=Seg...
+    }, []);
 
-    const diasDaSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const diasDaSemana = useMemo(() => ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"], []);
 
-    const getDiasDoMes = () => {
+    const getDiasDoMes = useCallback(() => {
         const numDias = diasNoMes(mesSelecionado, anoSelecionado);
-        const primeiroDiaIndex = primeiroDiaSemana(mesSelecionado, anoSelecionado); // 0=Dom, 1=Seg...
+        const primeiroDiaIndex = primeiroDiaSemana(mesSelecionado, anoSelecionado);
 
         const diasArray: (number | null)[] = [];
 
-        // Preencher com null para os dias vazios antes do 1º dia do mês
         for (let i = 0; i < primeiroDiaIndex; i++) {
             diasArray.push(null);
         }
 
-        // Preencher com os dias do mês
         for (let i = 1; i <= numDias; i++) {
             diasArray.push(i);
         }
         return diasArray;
-    };
+    }, [mesSelecionado, anoSelecionado, diasNoMes, primeiroDiaSemana]);
 
-    const temConsultaNoDia = (dia: number | null) => {
-        if (dia === null) return false;
-        const consultasDoMes = consultasDoMesSelecionado();
-        return consultasDoMes.some(consulta => {
+    const getConsultasDoDia = useCallback((dia: number | null) => {
+        if (dia === null) return [];
+        return consultasDoMesSelecionado().filter(consulta => {
             const data = new Date(consulta.data + "T00:00:00");
             return data.getDate() === dia;
-        });
-    };
+        }).sort((a, b) => a.horario.localeCompare(b.horario)); // Sort by time for display
+    }, [consultasDoMesSelecionado]);
+
 
     // Pagination logic
     const totalPages = Math.ceil(consultas.length / itemsPerPage);
@@ -518,25 +568,39 @@ export default function FinanceiroPage() {
                                     ))}
                                 </div>
                                 <div className="grid grid-cols-7 gap-1 text-center">
-                                    {getDiasDoMes().map((dia, index) => (
-                                        <div
-                                            key={index}
-                                            className={`
-                                                relative p-2 rounded-md flex items-center justify-center
-                                                ${dia === null ? "text-muted-foreground opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                                                ${dia !== null && dia === diaAtual && mesSelecionado === mesAtual && anoSelecionado === anoAtual
-                                                    ? "bg-indigo-100 text-indigo-800 font-bold dark:bg-indigo-900 dark:text-indigo-100"
-                                                    : "hover:bg-muted"
-                                                }
-                                                ${temConsultaNoDia(dia) ? "border-2 border-indigo-600 font-medium" : ""}
-                                            `}
-                                        >
-                                            {dia}
-                                            {temConsultaNoDia(dia) && dia !== null && (
-                                                <span className="absolute bottom-1 right-1 h-2 w-2 bg-indigo-600 rounded-full"></span>
-                                            )}
-                                        </div>
-                                    ))}
+                                    {getDiasDoMes().map((dia, index) => {
+                                        const isCurrentDay = dia !== null && dia === diaAtual && mesSelecionado === mesAtual && anoSelecionado === anoAtual;
+                                        const consultasDoDia = getConsultasDoDia(dia);
+                                        const hasConsultas = consultasDoDia.length > 0;
+
+                                        return (
+                                            <div
+                                                key={index}
+                                                className={`
+                                                    relative p-2 rounded-md flex flex-col items-center justify-start min-h-[80px] text-sm
+                                                    ${dia === null ? "text-muted-foreground opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-muted"}
+                                                    ${isCurrentDay
+                                                        ? "bg-indigo-100 text-indigo-800 font-bold dark:bg-indigo-900 dark:text-indigo-100"
+                                                        : ""
+                                                    }
+                                                    ${hasConsultas && !isCurrentDay ? "border-2 border-indigo-600 font-medium" : ""}
+                                                    ${hasConsultas && isCurrentDay ? "border-2 border-indigo-800 dark:border-indigo-400" : ""}
+                                                `}
+                                            >
+                                                <span className="font-semibold text-base">{dia}</span>
+                                                {hasConsultas && (
+                                                    <div className="mt-1 w-full text-xs text-left px-1">
+                                                        {consultasDoDia.map((c, i) => (
+                                                            <div key={i} className=" truncate">
+                                                                <span className="font-medium">{c.horario}</span> - {c.paciente}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {/* No longer need the bottom-right circle indicator if info is inside */}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </CardContent>
                         </Card>
@@ -569,7 +633,7 @@ export default function FinanceiroPage() {
                                                 paginatedConsultas.map((consulta) => (
                                                     <tr key={consulta.id}>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{consulta.paciente}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.data}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(consulta.data)}</td> {/* Formatted Date */}
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.horario}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.duracao} min</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
@@ -664,12 +728,21 @@ export default function FinanceiroPage() {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="horario">Horário</Label>
-                                <Input
-                                    id="horario"
-                                    type="time"
+                                <Select
                                     value={horario}
-                                    onChange={(e) => setHorario(e.target.value)}
-                                />
+                                    onValueChange={setHorario}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o horário" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {timeOptions.map((time) => (
+                                            <SelectItem key={time} value={time}>
+                                                {time}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <div className="grid gap-2">
@@ -716,8 +789,8 @@ export default function FinanceiroPage() {
                         <div className="grid gap-2">
                             <Label htmlFor="editPaciente">Paciente</Label>
                             <Select
-                                value={editPaciente}
-                                onValueChange={setEditPaciente}
+                                value={editPacienteId} // Use ID here
+                                onValueChange={setEditPacienteId}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione um paciente" />
@@ -743,12 +816,21 @@ export default function FinanceiroPage() {
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="editHorario">Horário</Label>
-                                <Input
-                                    id="editHorario"
-                                    type="time"
+                                <Select
                                     value={editHorario}
-                                    onChange={(e) => setEditHorario(e.target.value)}
-                                />
+                                    onValueChange={setEditHorario}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione o horário" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {timeOptions.map((time) => (
+                                            <SelectItem key={time} value={time}>
+                                                {time}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <div className="grid gap-2">
