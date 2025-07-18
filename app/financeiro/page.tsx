@@ -30,7 +30,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription, // Added this import
+    DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -168,7 +168,7 @@ export default function FinanceiroPage() {
             })) as Paciente[];
             listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
             setPacientes(listaPacientes);
-            console.log("carregarPacientes: Pacientes carregados:", listaPacientes.length);
+            console.log("carregarPacientes: Pacientes carregados:", listaPacientes.length, listaPacientes); // Log the loaded patients
             return listaPacientes;
         } catch (error) {
             console.error("carregarPacientes: Erro ao carregar pacientes:", error);
@@ -178,6 +178,7 @@ export default function FinanceiroPage() {
 
     const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
         console.log("carregarConsultas: Iniciando para Nutricionista ID", nutricionistaId);
+        console.log("carregarConsultas: Pacientes disponíveis para merge:", currentPacientes.length);
         try {
             const consultasRef = collection(db, "nutricionistas", nutricionistaId, "consultas");
             const snapshotConsultas = await getDocs(consultasRef);
@@ -194,16 +195,16 @@ export default function FinanceiroPage() {
                 const pacienteEncontrado = currentPacientes.find(
                     (paciente) => paciente.nome === consultaData.paciente
                 );
-                console.log(`carregarConsultas: Processando consulta para ${consultaData.paciente}. Paciente encontrado:`, pacienteEncontrado ? pacienteEncontrado.nome : 'Não');
+                // console.log(`carregarConsultas: Processando consulta para ${consultaData.paciente}. Paciente encontrado:`, pacienteEncontrado ? pacienteEncontrado.nome : 'Não');
 
 
                 if (valorConsulta === undefined || valorConsulta === null) {
                     if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
                         valorConsulta = pacienteEncontrado.valorConsulta;
-                        console.log(`carregarConsultas: Usando valor do paciente para ${consultaData.paciente}:`, valorConsulta);
+                        // console.log(`carregarConsultas: Usando valor do paciente para ${consultaData.paciente}:`, valorConsulta);
                     } else {
                         valorConsulta = valorPadraoNutricionista;
-                        console.log(`carregarConsultas: Usando valor padrão para ${consultaData.paciente}:`, valorConsulta);
+                        // console.log(`carregarConsultas: Usando valor padrão para ${consultaData.paciente}:`, valorConsulta);
                     }
                 }
 
@@ -224,7 +225,7 @@ export default function FinanceiroPage() {
                 return 0;
             });
             setConsultas(sortedConsultas);
-            console.log("carregarConsultas: Consultas carregadas e estado atualizado:", sortedConsultas.length);
+            console.log("carregarConsultas: Consultas carregadas e estado atualizado:", sortedConsultas.length, sortedConsultas); // Log the loaded consultations
         } catch (error) {
             console.error("carregarConsultas: Erro ao carregar as consultas:", error);
         }
@@ -254,7 +255,7 @@ export default function FinanceiroPage() {
                         console.log("useEffect: Pacientes carregados, agora carregando consultas...");
                         await carregarConsultas(id, loadedPacientes);
                     } else {
-                        console.log("useEffect: Nenhum paciente carregado.");
+                        console.log("useEffect: Nenhum paciente carregado. Consultas não serão carregadas.");
                     }
                 } else {
                     console.log("useEffect: Nenhum nutricionista encontrado para o email:", userEmail);
@@ -337,11 +338,23 @@ export default function FinanceiroPage() {
     }
 
     async function handleEditConsultaClick(consulta: Consulta) {
-        console.log("handleEditConsultaClick: Editando consulta:", consulta.id);
+        console.log("handleEditConsultaClick: Iniciando edição para consulta:", consulta.id);
+        console.log("handleEditConsultaClick: Detalhes da consulta recebida:", consulta); // CHECK THIS LOG!
+
         setConsultaSendoEditada(consulta);
+        
+        // Ensure 'pacientes' array is populated before trying to find
+        console.log("handleEditConsultaClick: Pacientes atualmente no estado:", pacientes.length, pacientes); // CHECK THIS LOG!
         const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
-        setEditPacienteId(foundPatient?.id || "");
-        console.log("handleEditConsultaClick: Paciente para edição:", foundPatient?.nome || "Não encontrado");
+        
+        if (!foundPatient) {
+            console.error(`handleEditConsultaClick: Paciente "${consulta.paciente}" NÃO ENCONTRADO no estado 'pacientes'. Verifique o carregamento de pacientes.`);
+            alert("Erro: Paciente da consulta não encontrado. Por favor, recarregue a página.");
+            return; // Exit if patient not found to prevent further errors
+        }
+
+        setEditPacienteId(foundPatient.id); // Use the found patient's ID
+        console.log("handleEditConsultaClick: Paciente ID para edição:", foundPatient.id);
 
         setEditData(consulta.data);
         const [hora, minuto] = consulta.horario.split(":");
@@ -349,14 +362,16 @@ export default function FinanceiroPage() {
         setEditMinuto(minuto);
 
         setEditDuracao(consulta.duracao);
-        setEditValor(consulta.valor.toString());
+        setEditValor(consulta.valor.toString()); // Convert number to string for input value
         setEditarConsultaModalAberto(true);
+        console.log("handleEditConsultaClick: Modal de edição aberto.");
     }
 
     async function atualizarConsulta() {
         console.log("atualizarConsulta: Tentando atualizar consulta:", consultaSendoEditada?.id);
         if (!consultaSendoEditada || !idNutricionista) {
             console.warn("atualizarConsulta: Consulta ou ID do nutricionista ausente.");
+            alert("Erro: Dados de consulta ou nutricionista ausentes.");
             return;
         }
 
@@ -375,7 +390,7 @@ export default function FinanceiroPage() {
             data: editData,
             horario: fullHorario,
             duracao: editDuracao,
-            valor: parseFloat(editValor),
+            valor: parseFloat(editValor), // Ensure value is parsed back to number
         };
         console.log("atualizarConsulta: Dados a serem atualizados:", updatedData);
 
@@ -396,10 +411,10 @@ export default function FinanceiroPage() {
         if (day === null) return;
         const clickedDate = new Date(anoSelecionado, mesSelecionado, day);
         const formattedClickedDate = clickedDate.toISOString().split('T')[0];
-        console.log("handleDayClick: Data formatada:", formattedClickedDate);
+        console.log("handleDayClick: Data formatada para comparação:", formattedClickedDate);
     
         const consultationsForThisDay = consultas.filter(consulta => {
-            console.log(`Comparando: ${consulta.data} com ${formattedClickedDate}`);
+            // console.log(`Comparando: ${consulta.data} com ${formattedClickedDate}`); // Can be verbose, uncomment if needed
             return consulta.data === formattedClickedDate;
         }).sort((a, b) => a.horario.localeCompare(b.horario));
         console.log("handleDayClick: Consultas para o dia:", consultationsForThisDay.length, consultationsForThisDay);
@@ -410,7 +425,10 @@ export default function FinanceiroPage() {
             setDetalhesConsultaModalAberto(true);
             console.log("handleDayClick: Modal de detalhes aberto.");
         } else {
-            console.log("handleDayClick: Nenhuma consulta para este dia.");
+            setConsultasDoDiaClicado([]); // Clear previous day's consultations
+            setDiaClicadoCalendar(formatDate(formattedClickedDate));
+            setDetalhesConsultaModalAberto(true); // Open even if no consultations, to show "Nenhuma consulta..."
+            console.log("handleDayClick: Nenhuma consulta para este dia. Abrindo modal para informar.");
         }
     }, [consultas, anoSelecionado, mesSelecionado, formatDate]);
 
@@ -496,12 +514,12 @@ export default function FinanceiroPage() {
         const currentMonthPadded = String(mesSelecionado + 1).padStart(2, '0');
         const currentDayPadded = String(dia).padStart(2, '0');
         const dateString = `${anoSelecionado}-${currentMonthPadded}-${currentDayPadded}`;
-        console.log(`getConsultasDoDia: Buscando consultas para ${dateString}`);
+        // console.log(`getConsultasDoDia: Buscando consultas para ${dateString}`); // Can be verbose, uncomment if needed
 
         const dailyConsultas = consultas.filter(consulta => {
             return consulta.data === dateString;
         }).sort((a, b) => a.horario.localeCompare(b.horario));
-        console.log(`getConsultasDoDia: Encontradas ${dailyConsultas.length} consultas para ${dateString}`);
+        // console.log(`getConsultasDoDia: Encontradas ${dailyConsultas.length} consultas para ${dateString}`); // Can be verbose, uncomment if needed
         return dailyConsultas;
     }, [consultas, mesSelecionado, anoSelecionado]);
 
@@ -749,7 +767,7 @@ export default function FinanceiroPage() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleEditConsultaClick(consulta)}
-                                                                    className="text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+                                                                    className="text-primary hover:text-primary/80" // Elegante e preto/tema
                                                                 >
                                                                     <Edit className="h-4 w-4" />
                                                                 </Button>
@@ -757,7 +775,7 @@ export default function FinanceiroPage() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => excluirConsulta(consulta.id)}
-                                                                    className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                                                                    className="text-red-600 hover:text-red-700" // Ícone de lixeira em vermelho
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
@@ -1062,22 +1080,24 @@ export default function FinanceiroPage() {
                                     )}
                                     <div className="flex justify-end gap-2 mt-2">
                                         <Button
-                                            variant="outline"
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => {
                                                 setDetalhesConsultaModalAberto(false);
                                                 handleEditConsultaClick(consulta);
                                             }}
+                                            className="text-primary hover:text-primary/80" // Ícone de edição elegante (preto/tema)
                                         >
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                         <Button
-                                            variant="destructive"
+                                            variant="ghost"
                                             size="sm"
                                             onClick={() => {
                                                 setDetalhesConsultaModalAberto(false);
                                                 excluirConsulta(consulta.id);
                                             }}
+                                            className="text-red-600 hover:text-red-700" // Ícone de lixeira em vermelho
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -1087,7 +1107,12 @@ export default function FinanceiroPage() {
                         )}
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => setDetalhesConsultaModalAberto(false)}>Fechar</Button>
+                        <Button
+                            onClick={() => setDetalhesConsultaModalAberto(false)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white" // Botão Fechar azul padrão
+                        >
+                            Fechar
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
