@@ -71,6 +71,14 @@ export default function PatientDetailPage() {
   const [toraxNovo, setToraxNovo] = useState("")
   const [bracoNovo, setBracoNovo] = useState("")
 
+  const [abdomenNovo, setAbdomenNovo] = useState("")
+  const [coxaNovo, setCoxaNovo] = useState("")
+  const [panturrilhaNovo, setPanturrilhaNovo] = useState("")
+  const [pesoOsseoNovo, setPesoOsseoNovo] = useState("")
+  const [pesoResidualNovo, setPesoResidualNovo] = useState("")
+  const [pesoGorduraNovo, setPesoGorduraNovo] = useState("")
+  const [pesoMassaMagraNovo, setPesoMassaMagraNovo] = useState("")
+
   const [editInfoOpen, setEditInfoOpen] = useState(false)
   const [editMetricsOpen, setEditMetricsOpen] = useState(false)
   const [isSubmittingDiet, setIsSubmittingDiet] = useState(false);
@@ -433,41 +441,58 @@ try {
   }
 
   const salvarNovaMetrica = async () => {
-    if (!session?.user?.email || !patient) return;
+  if (!session?.user?.email || !patient) return;
 
-    const novaMetrica = {
-      data: dataNovaMetrica,
-      peso: Number(pesoNovo),
-      gordura: Number(gorduraNova),
-      massaMagra: Number(massaMagraNova),
-      cintura: Number(cinturaNova),
-      // Adicione outros campos de métrica aqui, se houver
-    };
-
-    const refPaciente = doc(db, "nutricionistas", session.user.email, "pacientes", id);
-    const historicoAtualizado = [...(patient.historicoMetricas || []), novaMetrica];
-
-    await updateDoc(refPaciente, {
-      historicoMetricas: historicoAtualizado,
-    });
-
-    setPatient((prev: any) => ({
-      ...prev,
-      historicoMetricas: historicoAtualizado,
-    }));
-
-    // Limpa os campos do formulário
-    setDataNovaMetrica("");
-    setPesoNovo("");
-    setGorduraNova("");
-    setMassaMagraNova("");
-    setCinturaNova("");
-    setQuadrilNovo("");
-    setToraxNovo("");
-    setBracoNovo("");
-
-    toast({ title: "Nova métrica adicionada com sucesso" });
+  const novaMetrica = {
+    data: dataNovaMetrica,
+    peso: Number(pesoNovo),
+    gordura: Number(gorduraNova),
+    massaMagra: Number(massaMagraNova),
+    cintura: Number(cinturaNova),
+    quadril: Number(quadrilNovo),
+    torax: Number(toraxNovo),
+    braco: Number(bracoNovo),
+    abdomen: Number(abdomenNovo),
+    coxa: Number(coxaNovo),
+    panturrilha: Number(panturrilhaNovo),
+    pesoOsseo: Number(pesoOsseoNovo),
+    pesoResidual: Number(pesoResidualNovo),
+    pesoGordura: Number(pesoGorduraNovo),
+    pesoMassaMagra: Number(pesoMassaMagraNovo),
   };
+
+  const refPaciente = doc(db, "nutricionistas", session.user.email, "pacientes", id);
+  const historicoAtualizado = [...(patient.historicoMetricas || []), novaMetrica];
+
+  await updateDoc(refPaciente, {
+    historicoMetricas: historicoAtualizado,
+  });
+
+  setPatient((prev: any) => ({
+    ...prev,
+    historicoMetricas: historicoAtualizado,
+  }));
+
+  // Resetar campos
+  setDataNovaMetrica("");
+  setPesoNovo("");
+  setGorduraNova("");
+  setMassaMagraNova("");
+  setCinturaNova("");
+  setQuadrilNovo("");
+  setToraxNovo("");
+  setBracoNovo("");
+  setAbdomenNovo("");
+  setCoxaNovo("");
+  setPanturrilhaNovo("");
+  setPesoOsseoNovo("");
+  setPesoResidualNovo("");
+  setPesoGorduraNovo("");
+  setPesoMassaMagraNovo("");
+
+  toast({ title: "Nova métrica adicionada com sucesso" });
+};
+
 
   const excluirMetrica = async (data: string) => {
   if (!session?.user?.email || !patient) return;
@@ -562,37 +587,38 @@ try {
         {isActive ? "Paciente Ativo" : "Paciente Inativo"}
       </Label>
     </div>
-  </div>
 
-  {/* Botão ícone de lixeira preto */}
-  <AlertDialog>
-    <AlertDialogTrigger asChild>
-      <Button
-        variant="outline"
-        size="icon"
-        className="border border-black text-black hover:bg-black hover:text-white transition-colors"
-        title="Excluir paciente"
-      >
-        <Trash className="h-5 w-5" />
-        <span className="sr-only">Excluir paciente</span>
-      </Button>
-    </AlertDialogTrigger>
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
-        <AlertDialogDescription>
-          Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados do Firestore.
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-        <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
-          Excluir
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+    {/* Botão de Excluir */}
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-destructive hover:bg-muted"
+          title="Excluir paciente"
+        >
+          <Trash className="h-5 w-5" />
+          <span className="sr-only">Excluir paciente</span>
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados do Firestore.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </div>
 </div>
+
 
 
             {/* Informações Pessoais */}
@@ -735,41 +761,54 @@ try {
                   <CardContent>
                     {patient?.historicoMetricas?.length > 0 ? (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="p-2">Data</th>
-                              <th className="p-2">Peso (kg)</th>
-                              <th className="p-2">% Gordura</th>
-                              <th className="p-2">% Massa Magra</th>
-                              <th className="p-2">Cintura (cm)</th>
-                              <th className="p-2 text-right">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {patient.historicoMetricas
-                              .sort((a: any, b: any) => (a.data < b.data ? 1 : -1))
-                              .map((item: any, index: number) => (
-                                <tr key={index} className="border-b hover:bg-muted/50">
-                                  <td className="p-2">{item.data}</td>
-                                  <td className="p-2">{item.peso}</td>
-                                  <td className="p-2">{item.gordura}</td>
-                                  <td className="p-2">{item.massaMagra}</td>
-                                  <td className="p-2">{item.cintura}</td>
-                                  <td className="p-2 text-right">
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => excluirMetrica(item.data)}
-                                    >
-                                      Excluir
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <table className="w-full text-sm text-left border">
+                       <thead className="bg-muted">
+  <tr>
+    <th className="text-left p-2">Métrica</th>
+    {patient.historicoMetricas.map((item: any, index: number) => (
+  <th key={index} className="text-center p-2 font-semibold">
+    {item.data && !isNaN(new Date(item.data).getTime())
+  ? new Date(item.data).toLocaleDateString("pt-BR")
+  : "Sem data"}
+
+  </th>
+))}
+
+  </tr>
+</thead>
+
+                        <tbody>
+                          
+{[
+  { label: "Peso atual (Kg)", key: "peso" },
+  { label: "Altura atual (cm)", key: "altura" },
+  { label: "IMC (Kg/m²)", key: "imc" },
+  { label: "Classificação do IMC", key: "classificacaoImc" },
+  { label: "RCQ", key: "rcq" },
+  { label: "Risco por RCQ", key: "riscoRcq" },
+  { label: "CMB (cm)", key: "cmb" },
+  { label: "Classificação CMB", key: "classificacaoCmb" },
+  { label: "Gordura (%)", key: "gorduraPercentual" },
+  { label: "% de Gordura", key: "classificacaoGordura" },
+  { label: "Massa de Gordura (Kg)", key: "massaGordura" },
+  { label: "Massa Residual (Kg)", key: "massaResidual" },
+  { label: "Massa livre de gordura (Kg)", key: "massaLivreGordura" },
+  { label: "Somatório de dobras (mm)", key: "somatorioDobras" },
+  { label: "Densidade Corporal (g/mL)", key: "densidadeCorporal" },
+].map(({ label, key }) => (
+  <tr key={key} className="border-b hover:bg-muted/50">
+    <td className="p-2 font-medium">{label}</td>
+    {patient.historicoMetricas.map((item: any, index: number) => (
+      <td key={index} className="p-2 text-center">{item[key] ?? "-"}</td>
+    ))}
+  </tr>
+))}
+
+
+
+                        </tbody>
+                      </table>
+</div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nenhuma métrica registrada ainda.</p>
                     )}
