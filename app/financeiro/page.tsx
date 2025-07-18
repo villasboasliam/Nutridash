@@ -51,7 +51,7 @@ import {
     ChevronRight,
     Trash2,
     Edit,
-    Phone, // Added Phone icon for consultation details
+    Phone,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -67,7 +67,6 @@ type Consulta = {
         nome: string;
         telefone?: string; // Assuming phone number might exist
         email?: string; // Assuming email might exist
-        // ... other patient fields you might need
     };
 }
 
@@ -112,7 +111,7 @@ export default function FinanceiroPage() {
     // States para o modal de detalhes da consulta no calendário
     const [detalhesConsultaModalAberto, setDetalhesConsultaModalAberto] = useState(false);
     const [consultasDoDiaClicado, setConsultasDoDiaClicado] = useState<Consulta[]>([]);
-    const [diaClicadoCalendar, setDiaClicadoCalendar] = useState<string>(""); // To show date in modal
+    const [diaClicadoCalendar, setDiaClicadoCalendar] = useState<string>("");
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -167,7 +166,7 @@ export default function FinanceiroPage() {
         // Sort patients alphabetically by name
         listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
         setPacientes(listaPacientes);
-        return listaPacientes; // Return for use in carregarConsultas
+        return listaPacientes;
     }, []);
 
     const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
@@ -181,13 +180,12 @@ export default function FinanceiroPage() {
 
             const listaConsultasComValor = snapshotConsultas.docs.map((docConsulta) => {
                 const consultaData = docConsulta.data();
-                let valorConsulta = consultaData.valor; // Prioritize saved value
+                let valorConsulta = consultaData.valor;
 
                 const pacienteEncontrado = currentPacientes.find(
                     (paciente) => paciente.nome === consultaData.paciente
                 );
 
-                // If no value is saved for this specific consultation, try to get from patientInfo or default
                 if (valorConsulta === undefined || valorConsulta === null) {
                     if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
                         valorConsulta = pacienteEncontrado.valorConsulta;
@@ -200,7 +198,7 @@ export default function FinanceiroPage() {
                     id: docConsulta.id,
                     ...consultaData,
                     valor: valorConsulta,
-                    pacienteInfo: pacienteEncontrado // Ensure patientInfo is always attached
+                    pacienteInfo: pacienteEncontrado
                 };
             }) as Consulta[];
 
@@ -231,7 +229,6 @@ export default function FinanceiroPage() {
             if (nutricionista) {
                 const id = nutricionista.id;
                 setIdNutricionista(id);
-                // Load patients first, then load consultations
                 const loadedPacientes = await carregarPacientes(id);
                 if (loadedPacientes) {
                     await carregarConsultas(id, loadedPacientes);
@@ -239,7 +236,7 @@ export default function FinanceiroPage() {
             }
         }
         loadInitialData();
-    }, [session, carregarPacientes, carregarConsultas]); // Add carregarConsultas to deps
+    }, [session, carregarPacientes, carregarConsultas]);
 
     async function criarConsulta() {
         const fullHorario = `${newConsultaHora}:${newConsultaMinuto}`;
@@ -266,7 +263,7 @@ export default function FinanceiroPage() {
 
         try {
             await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
-                paciente: pacienteData.nome, // Use the name from the found patient
+                paciente: pacienteData.nome,
                 data: dataConsulta,
                 horario: fullHorario,
                 duracao,
@@ -349,11 +346,10 @@ export default function FinanceiroPage() {
         }
     }
 
-    // Function to handle click on a day in the calendar
     const handleDayClick = useCallback((day: number | null) => {
         if (day === null) return;
         const clickedDate = new Date(anoSelecionado, mesSelecionado, day);
-        const formattedClickedDate = clickedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const formattedClickedDate = clickedDate.toISOString().split('T')[0];
     
         const consultationsForThisDay = consultas.filter(consulta => {
             return consulta.data === formattedClickedDate;
@@ -361,14 +357,8 @@ export default function FinanceiroPage() {
     
         if (consultationsForThisDay.length > 0) {
             setConsultasDoDiaClicado(consultationsForThisDay);
-            setDiaClicadoCalendar(formatDate(formattedClickedDate)); // Set formatted date for modal title
+            setDiaClicadoCalendar(formatDate(formattedClickedDate));
             setDetalhesConsultaModalAberto(true);
-        } else {
-            // Optionally, if you want to allow adding a new appointment by clicking an empty day:
-            // setDataConsulta(formattedClickedDate);
-            // setNewConsultaHora("09"); // Example default hour
-            // setNewConsultaMinuto("00"); // Example default minute
-            // setNovaConsultaModalAberto(true);
         }
     }, [consultas, anoSelecionado, mesSelecionado, formatDate]);
 
@@ -384,11 +374,11 @@ export default function FinanceiroPage() {
     const calcularReceitaDaSemana = useCallback(() => {
         const hoje = new Date();
         const inicioDaSemana = new Date(hoje);
-        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay()); // Sunday
+        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay());
         inicioDaSemana.setHours(0, 0, 0, 0);
 
         const fimDaSemana = new Date(inicioDaSemana);
-        fimDaSemana.setDate(inicioDaSemana.getDate() + 6); // Saturday
+        fimDaSemana.setDate(inicioDaSemana.getDate() + 6);
         fimDaSemana.setHours(23, 59, 59, 999);
 
         const consultasDaSemana = consultas.filter((consulta) => {
@@ -636,7 +626,7 @@ export default function FinanceiroPage() {
                                                     ${hasConsultas && !isCurrentDay ? "border-2 border-indigo-600 font-medium" : ""}
                                                     ${hasConsultas && isCurrentDay ? "border-2 border-indigo-800 dark:border-indigo-400" : ""}
                                                 `}
-                                                onClick={() => handleDayClick(dia)} {/* Added click handler */}
+                                                onClick={() => handleDayClick(dia)}
                                             >
                                                 <span className="font-semibold text-base">{dia}</span>
                                                 {hasConsultas && (
@@ -746,7 +736,7 @@ export default function FinanceiroPage() {
 
             {/* Modal para Nova Consulta */}
             <Dialog open={novaConsultaModalAberto} onOpenChange={setNovaConsultaModalAberto}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto"> {/* Added max-h and overflow-y-auto */}
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Agendar Nova Consulta</DialogTitle>
                     </DialogHeader>
@@ -760,7 +750,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione um paciente" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-60 overflow-y-auto"> {/* Added max-h and overflow for long lists */}
+                                <SelectContent className="max-h-60 overflow-y-auto">
                                     {pacientes.map((paciente) => (
                                         <SelectItem key={paciente.id} value={paciente.id}>
                                             {paciente.nome}
@@ -789,7 +779,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="HH" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto"> {/* Constrain height of dropdown */}
+                                        <SelectContent className="max-h-48 overflow-y-auto">
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} value={hour}>
                                                     {hour}
@@ -807,7 +797,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="MM" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto"> {/* Constrain height of dropdown */}
+                                        <SelectContent className="max-h-48 overflow-y-auto">
                                             {minuteOptions.map((minute) => (
                                                 <SelectItem key={minute} value={minute}>
                                                     {minute}
@@ -858,7 +848,7 @@ export default function FinanceiroPage() {
 
             {/* Modal para Editar Consulta */}
             <Dialog open={editarConsultaModalAberto} onOpenChange={setEditarConsultaModalAberto}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto"> {/* Added max-h and overflow-y-auto */}
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Editar Consulta</DialogTitle>
                     </DialogHeader>
@@ -872,7 +862,7 @@ export default function FinanceiroPage() {
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione um paciente" />
                                 </SelectTrigger>
-                                <SelectContent className="max-h-60 overflow-y-auto"> {/* Added max-h and overflow for long lists */}
+                                <SelectContent className="max-h-60 overflow-y-auto">
                                     {pacientes.map((paciente) => (
                                         <SelectItem key={paciente.id} value={paciente.id}>
                                             {paciente.nome}
@@ -901,7 +891,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="HH" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto"> {/* Constrain height of dropdown */}
+                                        <SelectContent className="max-h-48 overflow-y-auto">
                                             {hourOptions.map((hour) => (
                                                 <SelectItem key={hour} value={hour}>
                                                     {hour}
@@ -919,7 +909,7 @@ export default function FinanceiroPage() {
                                         <SelectTrigger>
                                             <SelectValue placeholder="MM" />
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-48 overflow-y-auto"> {/* Constrain height of dropdown */}
+                                        <SelectContent className="max-h-48 overflow-y-auto">
                                             {minuteOptions.map((minute) => (
                                                 <SelectItem key={minute} value={minute}>
                                                     {minute}
@@ -986,7 +976,7 @@ export default function FinanceiroPage() {
                             Detalhes das consultas agendadas para este dia.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto"> {/* Added scroll to content if too many consultations */}
+                    <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
                         {consultasDoDiaClicado.length === 0 ? (
                             <p className="text-muted-foreground">Nenhuma consulta agendada para este dia.</p>
                         ) : (
@@ -1002,7 +992,6 @@ export default function FinanceiroPage() {
                                             {consulta.pacienteInfo.telefone}
                                         </div>
                                     )}
-                                    {/* You can add more details here if needed, like email, etc. */}
                                     {consulta.valor && (
                                         <div className="text-sm text-muted-foreground">
                                             Valor: R$ {consulta.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -1013,8 +1002,8 @@ export default function FinanceiroPage() {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => {
-                                                setDetalhesConsultaModalAberto(false); // Close details modal first
-                                                handleEditConsultaClick(consulta); // Open edit modal
+                                                setDetalhesConsultaModalAberto(false);
+                                                handleEditConsultaClick(consulta);
                                             }}
                                         >
                                             <Edit className="h-4 w-4" />
@@ -1023,8 +1012,8 @@ export default function FinanceiroPage() {
                                             variant="destructive"
                                             size="sm"
                                             onClick={() => {
-                                                setDetalhesConsultaModalAberto(false); // Close details modal first
-                                                excluirConsulta(consulta.id); // Delete consultation
+                                                setDetalhesConsultaModalAberto(false);
+                                                excluirConsulta(consulta.id);
                                             }}
                                         >
                                             <Trash2 className="h-4 w-4" />
