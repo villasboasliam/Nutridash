@@ -158,6 +158,10 @@ export default function FinanceiroPage() {
             id: doc.id,
             ...doc.data(),
         })) as Paciente[];
+
+        // MODIFICATION 1: Sort patient list alphabetically
+        listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
+
         setPacientes(listaPacientes);
     }, []);
     const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
@@ -196,13 +200,14 @@ export default function FinanceiroPage() {
                 };
             }) as Consulta[];
 
+            // MODIFICATION 2: Sort consultations by date (newest to oldest)
             setConsultas(
                 listaConsultasComValor.sort((a, b) => {
                     const dateA = new Date(a.data + "T" + a.horario).getTime();
                     const dateB = new Date(b.data + "T" + b.horario).getTime();
-                    if (dateA 
-                    !== dateB) {
-                        return dateA - dateB;
+                    // Sort from newest to oldest (descending)
+                    if (dateA !== dateB) {
+                        return dateB - dateA; // Changed from dateA - dateB
                     }
                     return 0; // Maintain original order if same date/time
                 })
