@@ -12,7 +12,7 @@ import {
     getDoc,
     addDoc,
     deleteDoc,
-    updateDoc, // Adicionado para a função de edição
+    updateDoc,
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,18 +40,17 @@ import {
     SelectItem,
 } from "@/components/ui/select";
 import {
-    Calendar,
+    Calendar as CalendarIcon, // Renamed to avoid conflict with the component
     FileText,
     Home,
     LineChart,
     Menu,
     Plus,
     Users,
-    Video,
     ChevronLeft,
     ChevronRight,
-    Trash2, // Import the Trash2 icon
-    Edit, // Import the Edit icon
+    Trash2,
+    Edit,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -120,7 +119,7 @@ export default function FinanceiroPage() {
             }
         }
         fetchData();
-    }, [session]);
+    }, [session, pacientes]); // Added pacientes to dependency array for correct patient info loading
 
     async function carregarPacientes(id: string) {
         const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
@@ -146,6 +145,7 @@ export default function FinanceiroPage() {
                     const consultaData = docConsulta.data();
                     let valorConsulta = valorPadraoNutricionista;
 
+                    // Find patient information within the already loaded 'pacientes' state
                     const pacienteEncontrado = pacientes.find(
                         (paciente) => paciente.nome === consultaData.paciente
                     );
@@ -166,17 +166,18 @@ export default function FinanceiroPage() {
                         return dataA - dataB;
                     }
 
+                    // Sort by whether valorConsulta is explicitly set in pacienteInfo
                     const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
                     const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
 
                     if (hasValorA && !hasValorB) {
-                        return -1;
+                        return -1; // a comes before b if a has explicit valor and b doesn't
                     }
                     if (!hasValorA && hasValorB) {
-                        return 1;
+                        return 1; // b comes before a if b has explicit valor and a doesn't
                     }
 
-                    return 0;
+                    return 0; // Maintain original order if both or neither have explicit valor
                 })
             );
         } catch (error) {
@@ -230,7 +231,8 @@ export default function FinanceiroPage() {
 
     async function handleEditConsultaClick(consulta: Consulta) {
         setConsultaSendoEditada(consulta);
-        setEditPaciente(consulta.pacienteInfo?.id || consulta.paciente); // Usa o ID do paciente se disponível, senão o nome
+        // Ensure that editPaciente is the ID if available, otherwise the name
+        setEditPaciente(pacientes.find(p => p.nome === consulta.paciente)?.id || consulta.paciente);
         setEditData(consulta.data);
         setEditHorario(consulta.horario);
         setEditDuracao(consulta.duracao);
@@ -242,10 +244,10 @@ export default function FinanceiroPage() {
         if (!consultaSendoEditada || !idNutricionista) return;
 
         const pacienteData = pacientes.find((p) => p.id === editPaciente);
-        const pacienteNome = pacienteData?.nome || editPaciente;
+        const pacienteNome = pacienteData?.nome || editPaciente; // Use ID to find the patient, then get the name
 
         const updatedData = {
-            paciente: pacienteNome,
+            paciente: pacienteNome, // Store the name, not the ID
             data: editData,
             horario: editHorario,
             duracao: editDuracao,
@@ -274,16 +276,15 @@ export default function FinanceiroPage() {
     function calcularReceitaDaSemana() {
         const hoje = new Date();
         const inicioDaSemana = new Date(hoje);
-        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay());
+        inicioDaSemana.setDate(hoje.getDate() - hoje.getDay()); // Sunday
         inicioDaSemana.setHours(0, 0, 0, 0);
 
         const fimDaSemana = new Date(inicioDaSemana);
-        fimDaSemana.setDate(inicioDaSemana.getDate() + 6);
+        fimDaSemana.setDate(inicioDaSemana.getDate() + 6); // Saturday
         fimDaSemana.setHours(23, 59, 59, 999);
 
         const consultasDaSemana = consultas.filter((consulta) => {
-            const dataConsulta = new Date(consulta.data);
-            dataConsulta.setHours(0, 0, 0, 0);
+            const dataConsulta = new Date(consulta.data + "T00:00:00"); // Add T00:00:00 to avoid timezone issues
             return dataConsulta >= inicioDaSemana && dataConsulta <= fimDaSemana;
         });
         return calcularReceita(consultasDaSemana);
@@ -291,7 +292,7 @@ export default function FinanceiroPage() {
 
     function consultasDoMesSelecionado() {
         return consultas.filter((consulta) => {
-            const data = new Date(consulta.data);
+            const data = new Date(consulta.data + "T00:00:00"); // Add T00:00:00
             return (
                 data.getMonth() === mesSelecionado &&
                 data.getFullYear() === anoSelecionado
@@ -321,10 +322,39 @@ export default function FinanceiroPage() {
     }
 
     function primeiroDiaSemana(mes: number, ano: number) {
+        // getDay() returns 0 for Sunday, 1 for Monday, etc.
+        // We want it to align with our grid (0 for Sunday)
         return new Date(ano, mes, 1).getDay();
     }
 
     const diasDaSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    const getDiasDoMes = () => {
+        const numDias = diasNoMes(mesSelecionado, anoSelecionado);
+        const primeiroDiaIndex = primeiroDiaSemana(mesSelecionado, anoSelecionado); // 0=Dom, 1=Seg...
+
+        const diasArray: (number | null)[] = [];
+
+        // Preencher com null para os dias vazios antes do 1º dia do mês
+        for (let i = 0; i < primeiroDiaIndex; i++) {
+            diasArray.push(null);
+        }
+
+        // Preencher com os dias do mês
+        for (let i = 1; i <= numDias; i++) {
+            diasArray.push(i);
+        }
+        return diasArray;
+    };
+
+    const temConsultaNoDia = (dia: number | null) => {
+        if (dia === null) return false;
+        const consultasDoMes = consultasDoMesSelecionado();
+        return consultasDoMes.some(consulta => {
+            const data = new Date(consulta.data + "T00:00:00");
+            return data.getDate() === dia;
+        });
+    };
 
     // Pagination logic
     const totalPages = Math.ceil(consultas.length / itemsPerPage);
@@ -471,6 +501,46 @@ export default function FinanceiroPage() {
                             </Select>
                         </div>
 
+                        {/* Calendário de Consultas */}
+                        <Card className="mt-6">
+                            <CardHeader>
+                                <CardTitle>Agenda de Consultas</CardTitle>
+                                <CardDescription>
+                                    Visualize suas consultas no calendário mensal
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-7 gap-1 text-center font-semibold mb-2 text-muted-foreground">
+                                    {diasDaSemana.map((dia, index) => (
+                                        <div key={index} className="py-2">
+                                            {dia}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-7 gap-1 text-center">
+                                    {getDiasDoMes().map((dia, index) => (
+                                        <div
+                                            key={index}
+                                            className={`
+                                                relative p-2 rounded-md flex items-center justify-center
+                                                ${dia === null ? "text-muted-foreground opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                                                ${dia !== null && dia === diaAtual && mesSelecionado === mesAtual && anoSelecionado === anoAtual
+                                                    ? "bg-indigo-100 text-indigo-800 font-bold dark:bg-indigo-900 dark:text-indigo-100"
+                                                    : "hover:bg-muted"
+                                                }
+                                                ${temConsultaNoDia(dia) ? "border-2 border-indigo-600 font-medium" : ""}
+                                            `}
+                                        >
+                                            {dia}
+                                            {temConsultaNoDia(dia) && dia !== null && (
+                                                <span className="absolute bottom-1 right-1 h-2 w-2 bg-indigo-600 rounded-full"></span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Tabela de Consultas Agendadas */}
                         <Card className="mt-6">
                             <CardHeader>
@@ -480,44 +550,44 @@ export default function FinanceiroPage() {
                             <CardContent>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
+                                        <thead className="bg-gray-50 dark:bg-gray-800">
                                             <tr>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Horário</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duração</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor (R$)</th>
-                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Paciente</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Data</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Horário</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Duração</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Valor (R$)</th>
+                                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Ações</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
+                                        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
                                             {paginatedConsultas.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={6} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Nenhuma consulta encontrada.</td>
+                                                    <td colSpan={6} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center dark:text-gray-400">Nenhuma consulta encontrada.</td>
                                                 </tr>
                                             ) : (
                                                 paginatedConsultas.map((consulta) => (
                                                     <tr key={consulta.id}>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{consulta.paciente}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.data}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.horario}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consulta.duracao} min</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{consulta.paciente}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.data}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.horario}</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.duracao} min</td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                             <div className="flex gap-2">
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleEditConsultaClick(consulta)}
-                                                                    className="text-gray-600 hover:text-gray-900"
+                                                                    className="text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
                                                                 >
                                                                     <Edit className="h-4 w-4" />
                                                                 </Button>
                                                                 <Button
-                                                                    variant="ghost" // Use ghost for a discrete look
-                                                                    size="icon" // Make it a small icon button
+                                                                    variant="ghost"
+                                                                    size="icon"
                                                                     onClick={() => excluirConsulta(consulta.id)}
-                                                                    className="text-gray-600 hover:text-gray-900" // Black icon, hover effect
+                                                                    className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
