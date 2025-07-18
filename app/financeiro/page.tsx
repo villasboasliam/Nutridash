@@ -339,28 +339,21 @@ export default function FinanceiroPage() {
 
     async function handleEditConsultaClick(consulta: Consulta) {
         console.log("handleEditConsultaClick: Iniciando edição para consulta:", consulta.id);
-        console.log("handleEditConsultaClick: Detalhes da consulta recebida:", consulta);
+        console.log("handleEditConsultaClick: Detalhes da consulta recebida:", consulta); // CHECK THIS LOG!
 
         setConsultaSendoEditada(consulta);
         
-        console.log("handleEditConsultaClick: Pacientes atualmente no estado:", pacientes.length, pacientes);
-
-        // Normaliza o nome do paciente da consulta para a busca
-        const nomeConsultaNormalizado = consulta.paciente.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        // Procura o paciente no array de pacientes, normalizando também o nome do paciente cadastrado
-        const foundPatient = pacientes.find(p => 
-            p.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === nomeConsultaNormalizado
-        );
+        // Ensure 'pacientes' array is populated before trying to find
+        console.log("handleEditConsultaClick: Pacientes atualmente no estado:", pacientes.length, pacientes); // CHECK THIS LOG!
+        const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
         
         if (!foundPatient) {
-            console.error(`handleEditConsultaClick: Paciente "${consulta.paciente}" NÃO ENCONTRADO no estado 'pacientes'.`);
-            console.error("Verifique se o paciente existe no Firestore e se o nome está consistente.");
-            alert("Erro: Paciente da consulta não encontrado. Verifique se o paciente ainda existe ou se há inconsistência no nome.");
-            return; // Sai da função para evitar erros
+            console.error(`handleEditConsultaClick: Paciente "${consulta.paciente}" NÃO ENCONTRADO no estado 'pacientes'. Verifique o carregamento de pacientes.`);
+            alert("Erro: Paciente da consulta não encontrado. Por favor, recarregue a página.");
+            return; // Exit if patient not found to prevent further errors
         }
 
-        setEditPacienteId(foundPatient.id);
+        setEditPacienteId(foundPatient.id); // Use the found patient's ID
         console.log("handleEditConsultaClick: Paciente ID para edição:", foundPatient.id);
 
         setEditData(consulta.data);
@@ -774,7 +767,7 @@ export default function FinanceiroPage() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleEditConsultaClick(consulta)}
-                                                                    className="text-primary hover:text-primary/80" // Ícone de edição elegante (preto/tema)
+                                                                    className="text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
                                                                 >
                                                                     <Edit className="h-4 w-4" />
                                                                 </Button>
@@ -782,7 +775,7 @@ export default function FinanceiroPage() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => excluirConsulta(consulta.id)}
-                                                                    className="text-red-600 hover:text-red-700" // Ícone de lixeira em vermelho
+                                                                    className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
                                                                 </Button>
@@ -1087,24 +1080,22 @@ export default function FinanceiroPage() {
                                     )}
                                     <div className="flex justify-end gap-2 mt-2">
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             size="sm"
                                             onClick={() => {
                                                 setDetalhesConsultaModalAberto(false);
                                                 handleEditConsultaClick(consulta);
                                             }}
-                                            className="text-primary hover:text-primary/80" // Ícone de edição elegante (preto/tema)
                                         >
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                         <Button
-                                            variant="ghost"
+                                            variant="destructive"
                                             size="sm"
                                             onClick={() => {
                                                 setDetalhesConsultaModalAberto(false);
                                                 excluirConsulta(consulta.id);
                                             }}
-                                            className="text-red-600 hover:text-red-700" // Ícone de lixeira em vermelho
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -1114,12 +1105,7 @@ export default function FinanceiroPage() {
                         )}
                     </div>
                     <DialogFooter>
-                        <Button
-                            onClick={() => setDetalhesConsultaModalAberto(false)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white" // Botão Fechar azul padrão
-                        >
-                            Fechar
-                        </Button>
+                        <Button onClick={() => setDetalhesConsultaModalAberto(false)}>Fechar</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
