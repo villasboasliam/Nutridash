@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react"; // adicione se ainda não tiver acima
+import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -47,26 +47,27 @@ import {
     Plus,
     Users,
     Video,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type Consulta = {
-  id: string
-  paciente: string
-  data: string
-  horario: string
-  duracao: string
-  valor: number
-  status: string
-  pacienteInfo?: any
+    id: string
+    paciente: string
+    data: string
+    horario: string
+    duracao: string
+    valor: number
+    status: string
+    pacienteInfo?: any
 }
-
 
 export default function FinanceiroPage() {
     const pathname = usePathname();
     const [consultas, setConsultas] = useState<any[]>([]);
     const [pacientes, setPacientes] = useState<any[]>([]);
-    const { data: session } = useSession(); // adicione logo no topo do componente
+    const { data: session } = useSession();
     const [novaConsultaModalAberto, setNovaConsultaModalAberto] =
         useState(false);
     const [pacienteSelecionado, setPacienteSelecionado] = useState("");
@@ -81,29 +82,33 @@ export default function FinanceiroPage() {
     );
     const [idNutricionista, setIdNutricionista] = useState<string | null>(null);
 
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
     const dataAtual = new Date();
     const diaAtual = dataAtual.getDate();
     const mesAtual = dataAtual.getMonth();
     const anoAtual = dataAtual.getFullYear();
 
-   useEffect(() => {
-    async function fetchData() {
-        if (!session?.user?.email) return;
-        const userEmail = session.user.email;
+    useEffect(() => {
+        async function fetchData() {
+            if (!session?.user?.email) return;
+            const userEmail = session.user.email;
 
-        const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
-        const nutricionista = nutricionistasSnap.docs.find(
-            (doc) => doc.data().email === userEmail
-        );
-        if (nutricionista) {
-            const id = nutricionista.id;
-            setIdNutricionista(id);
-            await carregarPacientes(id);
-            await carregarConsultas(id);
+            const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
+            const nutricionista = nutricionistasSnap.docs.find(
+                (doc) => doc.data().email === userEmail
+            );
+            if (nutricionista) {
+                const id = nutricionista.id;
+                setIdNutricionista(id);
+                await carregarPacientes(id);
+                await carregarConsultas(id);
+            }
         }
-    }
-    fetchData();
-}, [session]);
+        fetchData();
+    }, [session]);
 
     async function carregarPacientes(id: string) {
         const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
@@ -116,60 +121,57 @@ export default function FinanceiroPage() {
     }
 
     async function carregarConsultas(idNutricionista: string) {
-      try {
-          const consultasRef = collection(db, "nutricionistas", idNutricionista, "consultas");
-          const snapshotConsultas = await getDocs(consultasRef);
-  
-          // Buscar o documento do nutricionista para obter o valor padrão da consulta
-          const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
-          const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
-          const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
-  
-          const listaConsultasComValor = await Promise.all(
-              snapshotConsultas.docs.map(async (docConsulta) => {
-                  const consultaData = docConsulta.data();
-                  let valorConsulta = valorPadraoNutricionista; // Inicializa com o valor padrão
-  
-                  // Buscar o paciente associado à consulta pelo nome (isso pode ser inefficiente se houver muitos pacientes)
-                  const pacienteEncontrado = pacientes.find(
-                      (paciente) => paciente.nome === consultaData.paciente
-                  );
-  
-                  if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
-                      valorConsulta = pacienteEncontrado.valorConsulta; // Sobrescreve com o valor do paciente se existir
-                  }
-  
-                  return { id: docConsulta.id, ...consultaData, valor: valorConsulta, pacienteInfo: pacienteEncontrado };
-              })
-          );
-  
-          setConsultas(
-              listaConsultasComValor.sort((a, b) => {
-                  // Prioridade 1: Datas mais recentes
-                  const dataA = new Date(b.data).getTime();
-                  const dataB = new Date(a.data).getTime();
-                  if (dataA !== dataB) {
-                      return dataA - dataB;
-                  }
-  
-                  // Prioridade 2: Pacientes com valorConsulta definido (maior prioridade)
-                  const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
-                  const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
-  
-                  if (hasValorA && !hasValorB) {
-                      return -1; // a vem antes
-                  }
-                  if (!hasValorA && hasValorB) {
-                      return 1; // b vem antes
-                  }
-  
-                  return 0; // Se ambos têm ou não valorConsulta, mantém a ordem original (que já é por data)
-              })
-          );
-      } catch (error) {
-          console.error("Erro ao carregar as consultas:", error);
-      }
-  }
+        try {
+            const consultasRef = collection(db, "nutricionistas", idNutricionista, "consultas");
+            const snapshotConsultas = await getDocs(consultasRef);
+
+            const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
+            const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
+            const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
+
+            const listaConsultasComValor = await Promise.all(
+                snapshotConsultas.docs.map(async (docConsulta) => {
+                    const consultaData = docConsulta.data();
+                    let valorConsulta = valorPadraoNutricionista;
+
+                    const pacienteEncontrado = pacientes.find(
+                        (paciente) => paciente.nome === consultaData.paciente
+                    );
+
+                    if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
+                        valorConsulta = pacienteEncontrado.valorConsulta;
+                    }
+
+                    return { id: docConsulta.id, ...consultaData, valor: valorConsulta, pacienteInfo: pacienteEncontrado };
+                })
+            );
+
+            setConsultas(
+                listaConsultasComValor.sort((a, b) => {
+                    const dataA = new Date(b.data).getTime();
+                    const dataB = new Date(a.data).getTime();
+                    if (dataA !== dataB) {
+                        return dataA - dataB;
+                    }
+
+                    const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
+                    const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
+
+                    if (hasValorA && !hasValorB) {
+                        return -1;
+                    }
+                    if (!hasValorA && hasValorB) {
+                        return 1;
+                    }
+
+                    return 0;
+                })
+            );
+        } catch (error) {
+            console.error("Erro ao carregar as consultas:", error);
+        }
+    }
+
     async function criarConsulta() {
         if (!pacienteSelecionado || !dataConsulta || !horario || !idNutricionista) {
             alert("Preencha todos os campos obrigatórios!");
@@ -181,7 +183,7 @@ export default function FinanceiroPage() {
         const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
         const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
 
-        let valorConsulta = valorPadraoNutricionista || 0; // Fallback para 0 se padrão não existir
+        let valorConsulta = valorPadraoNutricionista || 0;
 
         if (pacienteData?.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
             valorConsulta = pacienteData.valorConsulta;
@@ -194,7 +196,7 @@ export default function FinanceiroPage() {
             data: dataConsulta,
             horario,
             duracao,
-            valor: valorConsulta, // Usar o valor dinâmico
+            valor: valorConsulta,
             status: "Agendada",
         });
 
@@ -216,7 +218,7 @@ export default function FinanceiroPage() {
 
     function calcularReceita(consultasFiltradas: any[]) {
         const total = consultasFiltradas.reduce(
-            (acc, consulta) => acc + Number(consulta.valor || 0), // Garante que o valor seja um número
+            (acc, consulta) => acc + Number(consulta.valor || 0),
             0
         );
         return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -277,53 +279,63 @@ export default function FinanceiroPage() {
 
     const diasDaSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+    // Pagination logic
+    const totalPages = Math.ceil(consultas.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedConsultas = consultas.slice(startIndex, endIndex);
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
     return (
         <div className="flex min-h-screen bg-background">
             <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex">
-  <div className="flex h-14 items-center border-b px-4">
-    <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-      <LineChart className="h-5 w-5" />
-      <span>NutriDash</span>
-    </Link>
-  </div>
-  <nav className="flex-1 space-y-1 p-2">
-    <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
-    <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
-    <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
-    <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
-    <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
-  </nav>
-</aside>
+                <div className="flex h-14 items-center border-b px-4">
+                    <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+                        <LineChart className="h-5 w-5" />
+                        <span>NutriDash</span>
+                    </Link>
+                </div>
+                <nav className="flex-1 space-y-1 p-2">
+                    <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
+                    <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
+                    <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+                    <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+                    <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
+                </nav>
+            </aside>
 
-<div className="flex flex-1 flex-col">
-  <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="lg:hidden">
-          <Menu className="h-5 w-5" />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0 z-50">
-        <div className="flex h-14 items-center border-b px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-            <LineChart className="h-5 w-5" />
-            <span>NutriDash</span>
-          </Link>
-        </div>
-        <nav className="flex-1 space-y-1 p-2">
-          <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
-          <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
-          <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
-          <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
-          <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
-        </nav>
-      </SheetContent>
-    </Sheet>
-    <div className="w-full flex-1">
-      <h2 className="text-lg font-medium">Financeiro</h2>
-    </div>
-    <ThemeToggle />
-  </header>
+            <div className="flex flex-1 flex-col">
+                <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="outline" size="icon" className="lg:hidden">
+                                <Menu className="h-5 w-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-64 p-0 z-50">
+                            <div className="flex h-14 items-center border-b px-4">
+                                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+                                    <LineChart className="h-5 w-5" />
+                                    <span>NutriDash</span>
+                                </Link>
+                            </div>
+                            <nav className="flex-1 space-y-1 p-2">
+                                <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label="Dashboard" pathname={pathname} />
+                                <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label="Pacientes" pathname={pathname} />
+                                <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+                                <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+                                <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label="Perfil" pathname={pathname} />
+                            </nav>
+                        </SheetContent>
+                    </Sheet>
+                    <div className="w-full flex-1">
+                        <h2 className="text-lg font-medium">Financeiro</h2>
+                    </div>
+                    <ThemeToggle />
+                </header>
 
                 <main className="flex-1 p-4 md:p-6">
                     <div className="flex flex-col gap-6">
@@ -449,7 +461,7 @@ export default function FinanceiroPage() {
                                                 const diaConsultaUTC = dataConsulta.getUTCDate();
                                                 const mesConsultaUTC = dataConsulta.getUTCMonth();
                                                 const anoConsultaUTC = dataConsulta.getUTCFullYear();
-                                            
+
                                                 return (
                                                     diaConsultaUTC === diaCalendario &&
                                                     mesConsultaUTC === mesSelecionado &&
@@ -508,8 +520,7 @@ export default function FinanceiroPage() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {consultas
-                                                    .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+                                                {paginatedConsultas
                                                     .map((consulta) => (
                                                         <tr key={consulta.id} className="border-b hover:bg-muted/50">
                                                             <td className="px-4 py-2">{consulta.paciente}</td>
@@ -517,11 +528,11 @@ export default function FinanceiroPage() {
                                                             <td className="px-4 py-2">{consulta.horario}</td>
                                                             <td className="px-4 py-2">{consulta.duracao} min</td>
                                                             <td className="px-4 py-2">
-    R$ {consulta.pacienteInfo?.valorConsulta !== undefined && consulta.pacienteInfo?.valorConsulta !== null
-        ? consulta.pacienteInfo.valorConsulta
-        : consulta.valor // Se pacienteInfo.valorConsulta não existir, usa o valor da consulta (que pode ser o padrão)
-    }
-</td>
+                                                                R$ {consulta.pacienteInfo?.valorConsulta !== undefined && consulta.pacienteInfo?.valorConsulta !== null
+                                                                    ? consulta.pacienteInfo.valorConsulta
+                                                                    : consulta.valor
+                                                                }
+                                                            </td>
                                                             <td className="px-4 py-2 text-right">
                                                                 <Button
                                                                     variant="destructive"
@@ -539,6 +550,37 @@ export default function FinanceiroPage() {
                                                     ))}
                                             </tbody>
                                         </table>
+                                        {/* Pagination Controls */}
+                                        {totalPages > 1 && (
+                                            <div className="flex justify-center items-center gap-2 mt-4">
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    onClick={() => handlePageChange(currentPage - 1)}
+                                                    disabled={currentPage === 1}
+                                                >
+                                                    <ChevronLeft className="h-4 w-4" />
+                                                </Button>
+                                                {Array.from({ length: totalPages }, (_, i) => (
+                                                    <Button
+                                                        key={i + 1}
+                                                        variant={currentPage === i + 1 ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => handlePageChange(i + 1)}
+                                                    >
+                                                        {i + 1}
+                                                    </Button>
+                                                ))}
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    onClick={() => handlePageChange(currentPage + 1)}
+                                                    disabled={currentPage === totalPages}
+                                                >
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="text-center text-muted-foreground py-10">
