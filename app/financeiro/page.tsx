@@ -30,7 +30,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription,
+    DialogDescription, // Added this import
     DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -158,19 +158,26 @@ export default function FinanceiroPage() {
 
 
     const carregarPacientes = useCallback(async (id: string) => {
-        const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
-        const snapshot = await getDocs(pacientesRef);
-        const listaPacientes = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Paciente[];
-        // Sort patients alphabetically by name
-        listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
-        setPacientes(listaPacientes);
-        return listaPacientes;
+        console.log("carregarPacientes: Iniciando para ID", id);
+        try {
+            const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
+            const snapshot = await getDocs(pacientesRef);
+            const listaPacientes = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            })) as Paciente[];
+            listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
+            setPacientes(listaPacientes);
+            console.log("carregarPacientes: Pacientes carregados:", listaPacientes.length);
+            return listaPacientes;
+        } catch (error) {
+            console.error("carregarPacientes: Erro ao carregar pacientes:", error);
+            return []; // Return empty array on error
+        }
     }, []);
 
     const carregarConsultas = useCallback(async (nutricionistaId: string, currentPacientes: Paciente[]) => {
+        console.log("carregarConsultas: Iniciando para Nutricionista ID", nutricionistaId);
         try {
             const consultasRef = collection(db, "nutricionistas", nutricionistaId, "consultas");
             const snapshotConsultas = await getDocs(consultasRef);
@@ -178,6 +185,7 @@ export default function FinanceiroPage() {
             const nutricionistaDocRef = doc(db, "nutricionistas", nutricionistaId);
             const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
             const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
+            console.log("carregarConsultas: Valor padrão nutricionista:", valorPadraoNutricionista);
 
             const listaConsultasComValor = snapshotConsultas.docs.map((docConsulta) => {
                 const consultaData = docConsulta.data();
@@ -186,12 +194,16 @@ export default function FinanceiroPage() {
                 const pacienteEncontrado = currentPacientes.find(
                     (paciente) => paciente.nome === consultaData.paciente
                 );
+                console.log(`carregarConsultas: Processando consulta para ${consultaData.paciente}. Paciente encontrado:`, pacienteEncontrado ? pacienteEncontrado.nome : 'Não');
+
 
                 if (valorConsulta === undefined || valorConsulta === null) {
                     if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
                         valorConsulta = pacienteEncontrado.valorConsulta;
+                        console.log(`carregarConsultas: Usando valor do paciente para ${consultaData.paciente}:`, valorConsulta);
                     } else {
                         valorConsulta = valorPadraoNutricionista;
+                        console.log(`carregarConsultas: Usando valor padrão para ${consultaData.paciente}:`, valorConsulta);
                     }
                 }
 
@@ -203,66 +215,87 @@ export default function FinanceiroPage() {
                 };
             }) as Consulta[];
 
-            setConsultas(
-                listaConsultasComValor.sort((a, b) => {
-                    const dateA = new Date(a.data + "T" + a.horario).getTime();
-                    const dateB = new Date(b.data + "T" + b.horario).getTime();
-                    if (dateA !== dateB) {
-                        return dateA - dateB;
-                    }
-                    return 0;
-                })
-            );
+            const sortedConsultas = listaConsultasComValor.sort((a, b) => {
+                const dateA = new Date(a.data + "T" + a.horario).getTime();
+                const dateB = new Date(b.data + "T" + b.horario).getTime();
+                if (dateA !== dateB) {
+                    return dateA - dateB;
+                }
+                return 0;
+            });
+            setConsultas(sortedConsultas);
+            console.log("carregarConsultas: Consultas carregadas e estado atualizado:", sortedConsultas.length);
         } catch (error) {
-            console.error("Erro ao carregar as consultas:", error);
+            console.error("carregarConsultas: Erro ao carregar as consultas:", error);
         }
     }, []);
 
     useEffect(() => {
         async function loadInitialData() {
-            if (!session?.user?.email) return;
+            console.log("useEffect: Iniciando loadInitialData");
+            if (!session?.user?.email) {
+                console.log("useEffect: Sessão de usuário não disponível.");
+                return;
+            }
             const userEmail = session.user.email;
+            console.log("useEffect: Email do usuário:", userEmail);
 
-            const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
-            const nutricionista = nutricionistasSnap.docs.find(
-                (doc) => doc.data().email === userEmail
-            );
-            if (nutricionista) {
-                const id = nutricionista.id;
-                setIdNutricionista(id);
-                const loadedPacientes = await carregarPacientes(id);
-                if (loadedPacientes) {
-                    await carregarConsultas(id, loadedPacientes);
+            try {
+                const nutricionistasSnap = await getDocs(collection(db, "nutricionistas"));
+                const nutricionista = nutricionistasSnap.docs.find(
+                    (doc) => doc.data().email === userEmail
+                );
+                if (nutricionista) {
+                    const id = nutricionista.id;
+                    setIdNutricionista(id);
+                    console.log("useEffect: Nutricionista encontrado com ID:", id);
+                    const loadedPacientes = await carregarPacientes(id);
+                    if (loadedPacientes) {
+                        console.log("useEffect: Pacientes carregados, agora carregando consultas...");
+                        await carregarConsultas(id, loadedPacientes);
+                    } else {
+                        console.log("useEffect: Nenhum paciente carregado.");
+                    }
+                } else {
+                    console.log("useEffect: Nenhum nutricionista encontrado para o email:", userEmail);
+                    setIdNutricionista(null); // Ensure idNutricionista is null if not found
+                    setPacientes([]); // Clear states if no nutritionist found
+                    setConsultas([]);
                 }
+            } catch (error) {
+                console.error("useEffect: Erro durante o carregamento inicial de dados:", error);
             }
         }
         loadInitialData();
     }, [session, carregarPacientes, carregarConsultas]);
 
     async function criarConsulta() {
+        console.log("criarConsulta: Tentando criar consulta...");
         const fullHorario = `${newConsultaHora}:${newConsultaMinuto}`;
         if (!pacienteSelecionado || !dataConsulta || !fullHorario || !idNutricionista) {
+            console.warn("criarConsulta: Campos obrigatórios ausentes:", { pacienteSelecionado, dataConsulta, fullHorario, idNutricionista });
             alert("Preencha todos os campos obrigatórios!");
             return;
         }
 
         const pacienteData = pacientes.find((p) => p.id === pacienteSelecionado);
         if (!pacienteData) {
+             console.error("criarConsulta: Paciente não encontrado para o ID:", pacienteSelecionado);
              alert("Paciente não encontrado. Selecione um paciente válido.");
              return;
         }
 
-        const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
-        const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
-        const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
-
-        let valorConsulta = valorPadraoNutricionista || 0;
-
-        if (pacienteData.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
-            valorConsulta = pacienteData.valorConsulta;
-        }
-
         try {
+            const nutricionistaDocRef = doc(db, "nutricionistas", idNutricionista);
+            const nutricionistaDocSnap = await getDoc(nutricionistaDocRef);
+            const valorPadraoNutricionista = nutricionistaDocSnap.data()?.valorConsultaPadrao;
+            let valorConsulta = valorPadraoNutricionista || 0;
+
+            if (pacienteData.valorConsulta !== undefined && pacienteData.valorConsulta !== null) {
+                valorConsulta = pacienteData.valorConsulta;
+            }
+            console.log("criarConsulta: Valor da consulta a ser salva:", valorConsulta);
+
             await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
                 paciente: pacienteData.nome,
                 data: dataConsulta,
@@ -280,30 +313,35 @@ export default function FinanceiroPage() {
             setNovaConsultaModalAberto(false);
             await carregarConsultas(idNutricionista, pacientes);
             alert("Consulta agendada com sucesso!");
+            console.log("criarConsulta: Consulta criada com sucesso e dados recarregados.");
         } catch (error) {
-            console.error("Erro ao criar consulta:", error);
+            console.error("criarConsulta: Erro ao criar consulta:", error);
             alert("Erro ao agendar consulta.");
         }
     }
 
     async function excluirConsulta(id: string) {
         if (!idNutricionista) return;
+        console.log("excluirConsulta: Tentando excluir consulta ID:", id);
         const confirm = window.confirm("Tem certeza que deseja excluir esta consulta?");
         if (!confirm) return;
         try {
             await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
             await carregarConsultas(idNutricionista, pacientes);
             alert("Consulta excluída com sucesso!");
+            console.log("excluirConsulta: Consulta excluída e dados recarregados.");
         } catch (error) {
-            console.error("Erro ao excluir consulta:", error);
+            console.error("excluirConsulta: Erro ao excluir consulta:", error);
             alert("Erro ao excluir consulta.");
         }
     }
 
     async function handleEditConsultaClick(consulta: Consulta) {
+        console.log("handleEditConsultaClick: Editando consulta:", consulta.id);
         setConsultaSendoEditada(consulta);
         const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
         setEditPacienteId(foundPatient?.id || "");
+        console.log("handleEditConsultaClick: Paciente para edição:", foundPatient?.nome || "Não encontrado");
 
         setEditData(consulta.data);
         const [hora, minuto] = consulta.horario.split(":");
@@ -316,18 +354,22 @@ export default function FinanceiroPage() {
     }
 
     async function atualizarConsulta() {
-        if (!consultaSendoEditada || !idNutricionista) return;
+        console.log("atualizarConsulta: Tentando atualizar consulta:", consultaSendoEditada?.id);
+        if (!consultaSendoEditada || !idNutricionista) {
+            console.warn("atualizarConsulta: Consulta ou ID do nutricionista ausente.");
+            return;
+        }
 
         const pacienteData = pacientes.find((p) => p.id === editPacienteId);
         const pacienteNome = pacienteData?.nome || "";
 
         if (!pacienteNome) {
+            console.error("atualizarConsulta: Paciente inválido selecionado para atualização.");
             alert("Paciente inválido selecionado.");
             return;
         }
 
         const fullHorario = `${editHora}:${editMinuto}`;
-
         const updatedData = {
             paciente: pacienteNome,
             data: editData,
@@ -335,31 +377,40 @@ export default function FinanceiroPage() {
             duracao: editDuracao,
             valor: parseFloat(editValor),
         };
+        console.log("atualizarConsulta: Dados a serem atualizados:", updatedData);
 
         try {
             await updateDoc(doc(db, "nutricionistas", idNutricionista, "consultas", consultaSendoEditada.id), updatedData);
             setEditarConsultaModalAberto(false);
             await carregarConsultas(idNutricionista, pacientes);
             alert("Consulta atualizada com sucesso!");
+            console.log("atualizarConsulta: Consulta atualizada com sucesso e dados recarregados.");
         } catch (error) {
-            console.error("Erro ao atualizar consulta:", error);
+            console.error("atualizarConsulta: Erro ao atualizar consulta:", error);
             alert("Erro ao atualizar consulta.");
         }
     }
 
     const handleDayClick = useCallback((day: number | null) => {
+        console.log("handleDayClick: Dia clicado:", day);
         if (day === null) return;
         const clickedDate = new Date(anoSelecionado, mesSelecionado, day);
         const formattedClickedDate = clickedDate.toISOString().split('T')[0];
+        console.log("handleDayClick: Data formatada:", formattedClickedDate);
     
         const consultationsForThisDay = consultas.filter(consulta => {
+            console.log(`Comparando: ${consulta.data} com ${formattedClickedDate}`);
             return consulta.data === formattedClickedDate;
         }).sort((a, b) => a.horario.localeCompare(b.horario));
+        console.log("handleDayClick: Consultas para o dia:", consultationsForThisDay.length, consultationsForThisDay);
     
         if (consultationsForThisDay.length > 0) {
             setConsultasDoDiaClicado(consultationsForThisDay);
             setDiaClicadoCalendar(formatDate(formattedClickedDate));
             setDetalhesConsultaModalAberto(true);
+            console.log("handleDayClick: Modal de detalhes aberto.");
+        } else {
+            console.log("handleDayClick: Nenhuma consulta para este dia.");
         }
     }, [consultas, anoSelecionado, mesSelecionado, formatDate]);
 
@@ -369,6 +420,7 @@ export default function FinanceiroPage() {
             (acc, consulta) => acc + Number(consulta.valor || 0),
             0
         );
+        console.log("calcularReceita: Total para consultas filtradas:", total);
         return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
     }, []);
 
@@ -386,17 +438,20 @@ export default function FinanceiroPage() {
             const dataConsulta = new Date(consulta.data + "T00:00:00");
             return dataConsulta >= inicioDaSemana && dataConsulta <= fimDaSemana;
         });
+        console.log("calcularReceitaDaSemana: Consultas da semana:", consultasDaSemana.length);
         return calcularReceita(consultasDaSemana);
     }, [consultas, calcularReceita]);
 
     const consultasDoMesSelecionado = useCallback(() => {
-        return consultas.filter((consulta) => {
+        const filtered = consultas.filter((consulta) => {
             const data = new Date(consulta.data + "T00:00:00");
             return (
                 data.getMonth() === mesSelecionado &&
                 data.getFullYear() === anoSelecionado
             );
         });
+        console.log("consultasDoMesSelecionado: Consultas do mês:", filtered.length);
+        return filtered;
     }, [consultas, mesSelecionado, anoSelecionado]);
 
     const meses = useMemo(() => [
@@ -432,6 +487,7 @@ export default function FinanceiroPage() {
         for (let i = 1; i <= numDias; i++) {
             diasArray.push(i);
         }
+        console.log("getDiasDoMes: Dias gerados para o mês:", diasArray.length);
         return diasArray;
     }, [mesSelecionado, anoSelecionado, diasNoMes, primeiroDiaSemana]);
 
@@ -440,10 +496,13 @@ export default function FinanceiroPage() {
         const currentMonthPadded = String(mesSelecionado + 1).padStart(2, '0');
         const currentDayPadded = String(dia).padStart(2, '0');
         const dateString = `${anoSelecionado}-${currentMonthPadded}-${currentDayPadded}`;
+        console.log(`getConsultasDoDia: Buscando consultas para ${dateString}`);
 
-        return consultas.filter(consulta => {
+        const dailyConsultas = consultas.filter(consulta => {
             return consulta.data === dateString;
         }).sort((a, b) => a.horario.localeCompare(b.horario));
+        console.log(`getConsultasDoDia: Encontradas ${dailyConsultas.length} consultas para ${dateString}`);
+        return dailyConsultas;
     }, [consultas, mesSelecionado, anoSelecionado]);
 
 
@@ -452,9 +511,12 @@ export default function FinanceiroPage() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedConsultas = consultas.slice(startIndex, endIndex);
+    console.log("Render: totalConsultas", consultas.length, "paginatedConsultas", paginatedConsultas.length);
+
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
+        console.log("handlePageChange: Mudando para página", page);
     };
 
     return (
