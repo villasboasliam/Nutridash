@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react"; // Added useMemo and useCallback for potential optimization
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -80,7 +80,9 @@ export default function FinanceiroPage() {
         useState(false);
     const [pacienteSelecionado, setPacienteSelecionado] = useState("");
     const [dataConsulta, setDataConsulta] = useState("");
-    const [horario, setHorario] = useState("");
+    // New states for hour/minute selection
+    const [newConsultaHora, setNewConsultaHora] = useState("");
+    const [newConsultaMinuto, setNewConsultaMinuto] = useState("");
     const [duracao, setDuracao] = useState("30");
     const [mesSelecionado, setMesSelecionado] = useState(
         new Date().getMonth()
@@ -93,11 +95,13 @@ export default function FinanceiroPage() {
     // States para o modal de edição
     const [editarConsultaModalAberto, setEditarConsultaModalAberto] = useState(false);
     const [consultaSendoEditada, setConsultaSendoEditada] = useState<Consulta | null>(null);
-    const [editPacienteId, setEditPacienteId] = useState(""); // Stores patient ID for select
+    const [editPacienteId, setEditPacienteId] = useState("");
     const [editData, setEditData] = useState("");
-    const [editHorario, setEditHorario] = useState("");
+    // New states for edit hour/minute selection
+    const [editHora, setEditHora] = useState("");
+    const [editMinuto, setEditMinuto] = useState("");
     const [editDuracao, setEditDuracao] = useState("");
-    const [editValor, setEditValor] = useState("");
+    const [editValor, setEditValor] = useState(""); // This should be a string for input value
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -116,27 +120,32 @@ export default function FinanceiroPage() {
             return `${day}/${month}/${year}`;
         } catch (error) {
             console.error("Error formatting date:", dateString, error);
-            return dateString; // Return original if format fails
+            return dateString;
         }
     };
 
-    // Helper to generate time options for select
-    const generateTimeOptions = () => {
-        const times = [];
+    // Helper to generate hour options (00-23)
+    const generateHourOptions = () => {
+        const hours = [];
         for (let h = 0; h < 24; h++) {
-            for (let m = 0; m < 60; m += 5) { // Increment by 5 minutes
-                const hour = String(h).padStart(2, '0');
-                const minute = String(m).padStart(2, '0');
-                times.push(`${hour}:${minute}`);
-            }
+            hours.push(String(h).padStart(2, '0'));
         }
-        return times;
+        return hours;
     };
 
-    const timeOptions = useMemo(generateTimeOptions, []); // Memoize time options
+    // Helper to generate minute options (00, 05, ..., 55)
+    const generateMinuteOptions = () => {
+        const minutes = [];
+        for (let m = 0; m < 60; m += 5) {
+            minutes.push(String(m).padStart(2, '0'));
+        }
+        return minutes;
+    };
+
+    const hourOptions = useMemo(generateHourOptions, []);
+    const minuteOptions = useMemo(generateMinuteOptions, []);
 
 
-    // Use useCallback for fetchData and carregarConsultas to prevent unnecessary re-renders
     const carregarPacientes = useCallback(async (id: string) => {
         const pacientesRef = collection(db, "nutricionistas", id, "pacientes");
         const snapshot = await getDocs(pacientesRef);
@@ -158,45 +167,43 @@ export default function FinanceiroPage() {
 
             const listaConsultasComValor = snapshotConsultas.docs.map((docConsulta) => {
                 const consultaData = docConsulta.data();
-                let valorConsulta = valorPadraoNutricionista;
+                let valorConsulta = consultaData.valor; // Prioritize saved value
 
-                // Find patient information within the passed 'currentPacientes'
-                const pacienteEncontrado = currentPacientes.find(
-                    (paciente) => paciente.nome === consultaData.paciente
-                );
+                // If no value is saved, try to get from patientInfo or default
+                if (valorConsulta === undefined || valorConsulta === null) {
+                    const pacienteEncontrado = currentPacientes.find(
+                        (paciente) => paciente.nome === consultaData.paciente
+                    );
 
-                if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
-                    valorConsulta = pacienteEncontrado.valorConsulta;
+                    if (pacienteEncontrado && pacienteEncontrado.valorConsulta !== undefined && pacienteEncontrado.valorConsulta !== null) {
+                        valorConsulta = pacienteEncontrado.valorConsulta;
+                    } else {
+                        valorConsulta = valorPadraoNutricionista;
+                    }
                 }
 
-                return { id: docConsulta.id, ...consultaData, valor: valorConsulta, pacienteInfo: pacienteEncontrado };
+                return {
+                    id: docConsulta.id,
+                    ...consultaData,
+                    valor: valorConsulta,
+                    pacienteInfo: currentPacientes.find(p => p.nome === consultaData.paciente) // Ensure patientInfo is updated
+                };
             }) as Consulta[];
 
             setConsultas(
                 listaConsultasComValor.sort((a, b) => {
-                    // Sort by date, then by whether valorConsulta is explicitly set
-                    const dateA = new Date(a.data + "T" + a.horario).getTime(); // Use time for accurate sort
-                    const dateB = new Date(b.data + "T" + b.horario).getTime(); // Use time for accurate sort
+                    const dateA = new Date(a.data + "T" + a.horario).getTime();
+                    const dateB = new Date(b.data + "T" + b.horario).getTime();
                     if (dateA !== dateB) {
                         return dateA - dateB;
                     }
-
-                    const hasValorA = a.pacienteInfo?.valorConsulta !== undefined && a.pacienteInfo?.valorConsulta !== null;
-                    const hasValorB = b.pacienteInfo?.valorConsulta !== undefined && b.pacienteInfo?.valorConsulta !== null;
-
-                    if (hasValorA && !hasValorB) {
-                        return -1;
-                    }
-                    if (!hasValorA && hasValorB) {
-                        return 1;
-                    }
-                    return 0;
+                    return 0; // Maintain original order if same date/time
                 })
             );
         } catch (error) {
             console.error("Erro ao carregar as consultas:", error);
         }
-    }, []); // Empty dependency array, as currentPacientes is passed as an argument
+    }, []);
 
     useEffect(() => {
         async function loadInitialData() {
@@ -210,26 +217,24 @@ export default function FinanceiroPage() {
             if (nutricionista) {
                 const id = nutricionista.id;
                 setIdNutricionista(id);
-                // Load patients first, then use their loaded state to load consultations
-                await carregarPacientes(id);
+                const loadedPacientes = await carregarPacientes(id); // Ensure pacientes are loaded first
+                // No need to call carregarConsultas here, as the useEffect below handles it based on patients state
             }
         }
         loadInitialData();
-    }, [session, carregarPacientes]); // Depend on session and carregarPacientes
+    }, [session, carregarPacientes]);
 
     // This useEffect ensures consultations are reloaded when patients change or on initial load
     useEffect(() => {
-        if (idNutricionista && pacientes.length > 0) { // Ensure patients are loaded before trying to load consultations that depend on them
+        if (idNutricionista && pacientes) { // Ensure idNutricionista is set and patients array is available
             carregarConsultas(idNutricionista, pacientes);
-        } else if (idNutricionista && pacientes.length === 0 && consultas.length === 0) {
-            // Handle case where there might be no patients yet but we still want to load consultations
-            // or if patients load after consultations were attempted once without patients.
-            carregarConsultas(idNutricionista, []); // Pass an empty array if no patients
         }
     }, [idNutricionista, pacientes, carregarConsultas]); // Reload consultations when patients data changes
 
+
     async function criarConsulta() {
-        if (!pacienteSelecionado || !dataConsulta || !horario || !idNutricionista) {
+        const fullHorario = `${newConsultaHora}:${newConsultaMinuto}`;
+        if (!pacienteSelecionado || !dataConsulta || !fullHorario || !idNutricionista) {
             alert("Preencha todos os campos obrigatórios!");
             return;
         }
@@ -251,7 +256,7 @@ export default function FinanceiroPage() {
             await addDoc(collection(db, "nutricionistas", idNutricionista, "consultas"), {
                 paciente: pacienteNome,
                 data: dataConsulta,
-                horario,
+                horario: fullHorario,
                 duracao,
                 valor: valorConsulta,
                 status: "Agendada",
@@ -259,10 +264,11 @@ export default function FinanceiroPage() {
 
             setPacienteSelecionado("");
             setDataConsulta("");
-            setHorario("");
+            setNewConsultaHora(""); // Reset hour
+            setNewConsultaMinuto(""); // Reset minute
             setDuracao("30");
             setNovaConsultaModalAberto(false);
-            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta agendada com sucesso!");
         } catch (error) {
             console.error("Erro ao criar consulta:", error);
@@ -276,7 +282,7 @@ export default function FinanceiroPage() {
         if (!confirm) return;
         try {
             await deleteDoc(doc(db, "nutricionistas", idNutricionista, "consultas", id));
-            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta excluída com sucesso!");
         } catch (error) {
             console.error("Erro ao excluir consulta:", error);
@@ -286,13 +292,17 @@ export default function FinanceiroPage() {
 
     async function handleEditConsultaClick(consulta: Consulta) {
         setConsultaSendoEditada(consulta);
-        // Find the patient ID based on the patient's name stored in the consultation
         const foundPatient = pacientes.find(p => p.nome === consulta.paciente);
-        setEditPacienteId(foundPatient?.id || ""); // Set ID for the select input
+        setEditPacienteId(foundPatient?.id || "");
+
         setEditData(consulta.data);
-        setEditHorario(consulta.horario);
+        // Split horario into hour and minute for separate selects
+        const [hora, minuto] = consulta.horario.split(":");
+        setEditHora(hora);
+        setEditMinuto(minuto);
+
         setEditDuracao(consulta.duracao);
-        setEditValor(consulta.valor.toString());
+        setEditValor(consulta.valor.toString()); // Convert number to string for input value
         setEditarConsultaModalAberto(true);
     }
 
@@ -300,25 +310,27 @@ export default function FinanceiroPage() {
         if (!consultaSendoEditada || !idNutricionista) return;
 
         const pacienteData = pacientes.find((p) => p.id === editPacienteId);
-        const pacienteNome = pacienteData?.nome || ""; // Get name from ID
+        const pacienteNome = pacienteData?.nome || "";
 
         if (!pacienteNome) {
             alert("Paciente inválido selecionado.");
             return;
         }
 
+        const fullHorario = `${editHora}:${editMinuto}`;
+
         const updatedData = {
             paciente: pacienteNome,
             data: editData,
-            horario: editHorario,
+            horario: fullHorario,
             duracao: editDuracao,
-            valor: parseFloat(editValor),
+            valor: parseFloat(editValor), // Convert string back to number
         };
 
         try {
             await updateDoc(doc(db, "nutricionistas", idNutricionista, "consultas", consultaSendoEditada.id), updatedData);
             setEditarConsultaModalAberto(false);
-            await carregarConsultas(idNutricionista, pacientes); // Pass updated patients to ensure correct re-fetch
+            await carregarConsultas(idNutricionista, pacientes); // Re-fetch to update counters and table
             alert("Consulta atualizada com sucesso!");
         } catch (error) {
             console.error("Erro ao atualizar consulta:", error);
@@ -332,7 +344,7 @@ export default function FinanceiroPage() {
             0
         );
         return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    }, []); // Empty dependency array as it only depends on its input
+    }, []);
 
     const calcularReceitaDaSemana = useCallback(() => {
         const hoje = new Date();
@@ -349,7 +361,7 @@ export default function FinanceiroPage() {
             return dataConsulta >= inicioDaSemana && dataConsulta <= fimDaSemana;
         });
         return calcularReceita(consultasDaSemana);
-    }, [consultas, calcularReceita]); // Depend on 'consultas' and 'calcularReceita'
+    }, [consultas, calcularReceita]);
 
     const consultasDoMesSelecionado = useCallback(() => {
         return consultas.filter((consulta) => {
@@ -359,7 +371,7 @@ export default function FinanceiroPage() {
                 data.getFullYear() === anoSelecionado
             );
         });
-    }, [consultas, mesSelecionado, anoSelecionado]); // Depend on 'consultas', 'mesSelecionado', 'anoSelecionado'
+    }, [consultas, mesSelecionado, anoSelecionado]);
 
     const meses = useMemo(() => [
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -376,7 +388,7 @@ export default function FinanceiroPage() {
     }, []);
 
     const primeiroDiaSemana = useCallback((mes: number, ano: number) => {
-        return new Date(ano, mes, 1).getDay(); // 0=Dom, 1=Seg...
+        return new Date(ano, mes, 1).getDay();
     }, []);
 
     const diasDaSemana = useMemo(() => ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"], []);
@@ -402,7 +414,7 @@ export default function FinanceiroPage() {
         return consultasDoMesSelecionado().filter(consulta => {
             const data = new Date(consulta.data + "T00:00:00");
             return data.getDate() === dia;
-        }).sort((a, b) => a.horario.localeCompare(b.horario)); // Sort by time for display
+        }).sort((a, b) => a.horario.localeCompare(b.horario));
     }, [consultasDoMesSelecionado]);
 
 
@@ -589,15 +601,17 @@ export default function FinanceiroPage() {
                                             >
                                                 <span className="font-semibold text-base">{dia}</span>
                                                 {hasConsultas && (
-                                                    <div className="mt-1 w-full text-xs text-left px-1">
-                                                        {consultasDoDia.map((c, i) => (
-                                                            <div key={i} className=" truncate">
-                                                                <span className="font-medium">{c.horario}</span> - {c.paciente}
-                                                            </div>
-                                                        ))}
+                                                    <div className="mt-1 w-full text-xs text-left px-1 max-h-[50px] overflow-hidden"> {/* Added max-h and overflow */}
+                                                        {consultasDoDia.map((c, i) => {
+                                                            const firstName = c.paciente.split(' ')[0]; // Get first name
+                                                            return (
+                                                                <div key={i} className="truncate leading-tight"> {/* leading-tight to reduce line height */}
+                                                                    <span className="font-medium">{c.horario}</span> - {firstName}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
-                                                {/* No longer need the bottom-right circle indicator if info is inside */}
                                             </div>
                                         );
                                     })}
@@ -633,7 +647,7 @@ export default function FinanceiroPage() {
                                                 paginatedConsultas.map((consulta) => (
                                                     <tr key={consulta.id}>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{consulta.paciente}</td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(consulta.data)}</td> {/* Formatted Date */}
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(consulta.data)}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.horario}</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consulta.duracao} min</td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">R$ {consulta.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
@@ -726,23 +740,43 @@ export default function FinanceiroPage() {
                                     onChange={(e) => setDataConsulta(e.target.value)}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="horario">Horário</Label>
-                                <Select
-                                    value={horario}
-                                    onValueChange={setHorario}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecione o horário" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {timeOptions.map((time) => (
-                                            <SelectItem key={time} value={time}>
-                                                {time}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid grid-cols-2 gap-2"> {/* Nested grid for Hora/Minuto */}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="newConsultaHora">Hora</Label>
+                                    <Select
+                                        value={newConsultaHora}
+                                        onValueChange={setNewConsultaHora}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="HH" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {hourOptions.map((hour) => (
+                                                <SelectItem key={hour} value={hour}>
+                                                    {hour}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="newConsultaMinuto">Minuto</Label>
+                                    <Select
+                                        value={newConsultaMinuto}
+                                        onValueChange={setNewConsultaMinuto}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="MM" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {minuteOptions.map((minute) => (
+                                                <SelectItem key={minute} value={minute}>
+                                                    {minute}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                         <div className="grid gap-2">
@@ -765,7 +799,11 @@ export default function FinanceiroPage() {
                     <DialogFooter>
                         <Button
                             variant="outline"
-                            onClick={() => setNovaConsultaModalAberto(false)}
+                            onClick={() => {
+                                setNovaConsultaModalAberto(false);
+                                setNewConsultaHora("");
+                                setNewConsultaMinuto("");
+                            }}
                         >
                             Cancelar
                         </Button>
@@ -789,7 +827,7 @@ export default function FinanceiroPage() {
                         <div className="grid gap-2">
                             <Label htmlFor="editPaciente">Paciente</Label>
                             <Select
-                                value={editPacienteId} // Use ID here
+                                value={editPacienteId}
                                 onValueChange={setEditPacienteId}
                             >
                                 <SelectTrigger>
@@ -814,23 +852,43 @@ export default function FinanceiroPage() {
                                     onChange={(e) => setEditData(e.target.value)}
                                 />
                             </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="editHorario">Horário</Label>
-                                <Select
-                                    value={editHorario}
-                                    onValueChange={setEditHorario}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecione o horário" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {timeOptions.map((time) => (
-                                            <SelectItem key={time} value={time}>
-                                                {time}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid grid-cols-2 gap-2"> {/* Nested grid for Hora/Minuto */}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="editHora">Hora</Label>
+                                    <Select
+                                        value={editHora}
+                                        onValueChange={setEditHora}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="HH" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {hourOptions.map((hour) => (
+                                                <SelectItem key={hour} value={hour}>
+                                                    {hour}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="editMinuto">Minuto</Label>
+                                    <Select
+                                        value={editMinuto}
+                                        onValueChange={setEditMinuto}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="MM" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {minuteOptions.map((minute) => (
+                                                <SelectItem key={minute} value={minute}>
+                                                    {minute}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                         <div className="grid gap-2">
@@ -862,7 +920,11 @@ export default function FinanceiroPage() {
                     <DialogFooter>
                         <Button
                             variant="outline"
-                            onClick={() => setEditarConsultaModalAberto(false)}
+                            onClick={() => {
+                                setEditarConsultaModalAberto(false);
+                                setEditHora("");
+                                setEditMinuto("");
+                            }}
                         >
                             Cancelar
                         </Button>
