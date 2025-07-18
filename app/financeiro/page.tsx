@@ -159,8 +159,12 @@ export default function FinanceiroPage() {
             ...doc.data(),
         })) as Paciente[];
 
-        // MODIFICATION 1: Sort patient list alphabetically
-        listaPacientes.sort((a, b) => a.nome.localeCompare(b.nome));
+        // MODIFICATION 1: Sort patient list alphabetically, safely handling undefined/null names
+        listaPacientes.sort((a, b) => {
+            const nameA = a.nome || ''; // Default to empty string if null or undefined
+            const nameB = b.nome || ''; // Default to empty string if null or undefined
+            return nameA.localeCompare(nameB);
+        });
 
         setPacientes(listaPacientes);
     }, []);
