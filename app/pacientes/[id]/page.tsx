@@ -518,6 +518,19 @@ try {
 
   toast({ title: "Métrica excluída com sucesso" });
 };
+const formatarTelefone = (telefone: string) => {
+  const apenasNumeros = telefone?.replace(/\D/g, "");
+  if (apenasNumeros?.length === 11) {
+    return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+  }
+  return telefone;
+};
+const formatarData = (data: string) => {
+  if (!data) return "";
+  const date = new Date(data);
+  if (isNaN(date.getTime())) return data;
+  return date.toLocaleDateString("pt-BR");
+};
 
   return (
     <div className="flex min-h-screen">
@@ -641,11 +654,11 @@ try {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-                  <p>{patient?.telefone}</p>
+                  <p>{formatarTelefone(patient?.telefone)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
-                  <p>{patient?.birthdate}</p>
+                  <p>{formatarData(patient?.birthdate)}</p>
                 </div>
                
               </CardContent>
