@@ -681,9 +681,11 @@ const formatarData = (data: string) => {
   <div className="grid gap-1">
     <Label>Nome</Label>
     <Input
-      value={editData.name}
-      onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+     type="date"
+     value={editData.birthdate ? new Date(new Date(editData.birthdate).getTime() - 86400000).toISOString().split("T")[0] : ""}
+     onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
     />
+
   </div>
 
   <div className="grid gap-1">
