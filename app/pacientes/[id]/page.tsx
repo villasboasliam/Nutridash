@@ -51,6 +51,12 @@ export default function PatientDetailPage() {
   const [submitIndividualMaterialText, setSubmitIndividualMaterialText] = useState('Enviar Material');
   const [submitIndividualMaterialColorClass, setSubmitIndividualMaterialColorClass] = useState('bg-indigo-600 hover:bg-indigo-700');
 
+function formatDateToInput(dateStr: string) {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const offsetDate = new Date(date.getTime() + Math.abs(date.getTimezoneOffset() * 60000));
+  return offsetDate.toISOString().split("T")[0];
+}
 
   const params = useParams()
   const id = decodeURIComponent(params?.id as string)
@@ -705,10 +711,11 @@ const formatarData = (data: string) => {
   <div className="grid gap-1">
     <Label>Data de Nascimento</Label>
     <Input
-      type="date"
-      value={editData.birthdate}
-      onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
-    />
+        type="date"
+        value={formatDateToInput(editData.birthdate)}
+        onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
+      />
+
   </div>
 </div>
 
