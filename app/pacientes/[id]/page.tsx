@@ -916,7 +916,6 @@ const formatarData = (data: string) => {
                     <CardDescription>Faça upload de dietas em PDF para o paciente</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleReplaceDiet}>
                       <div className="flex flex-col gap-4 max-w-xl mx-auto">
                         <div className="grid gap-2">
                           <Label>Nome da Dieta</Label>
@@ -960,7 +959,8 @@ const formatarData = (data: string) => {
                         <div className="flex justify-center mt-4">
                           <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
                             <Button
-                              type="submit"
+                              type="button" // ← IMPORTANTE: muda de submit para button
+                              onClick={handleReplaceDiet} // ← CHAMA A FUNÇÃO DIRETAMENTE
                               className={`w-full text-white ${submitButtonColorClass}`}
                               disabled={!selectedPDF || isSubmittingDiet}
                             >
@@ -969,7 +969,7 @@ const formatarData = (data: string) => {
                           </div>
                         </div>
                       </div>
-                    </form>
+                    
                   </CardContent>
                 </Card>
                 {patient?.dietas?.length > 0 && (
