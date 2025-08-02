@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -64,6 +63,8 @@ export default function PatientDetailPage() {
   const [isActive, setIsActive] = useState(true)
   const [dataNovaMetrica, setDataNovaMetrica] = useState("")
   const [infoParaEditar, setInfoParaEditar] = useState<any>(null)
+  const [metricaEditando, setMetricaEditando] = useState<any>(null)
+  
 
 
   // Estados para os campos de ENTRADA (base measurements)
@@ -855,13 +856,21 @@ const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => {
                   <p>{patient?.email}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-                  <p>{patient?.telefone}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
-                  <p>{patient?.birthdate}</p>
-                </div>
+                <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+                <p>
+                  {patient?.telefone
+                    ? `(${patient.telefone.slice(0, 2)}) ${patient.telefone.slice(2, 7)}-${patient.telefone.slice(7)}`
+                    : "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
+                <p>
+                  {patient?.birthdate
+                    ? new Date(patient.birthdate).toLocaleDateString("pt-BR")
+                    : "-"}
+                </p>
+              </div>
                
               </CardContent>
             </Card>
@@ -1005,109 +1014,122 @@ const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => {
           </span>
 
 {/* Botão de editar */}
-<Dialog>
+<Dialog
+  open={!!metricaEditando}
+  onOpenChange={(open) => {
+    if (!open) setMetricaEditando(null)
+  }}
+>
   <DialogTrigger asChild>
     <button
-      onClick={() => setMetricaParaExcluir(item)}
+      onClick={() => setMetricaEditando(item)}
       className="text-blue-500 hover:text-blue-700 text-xs font-bold leading-none"
       title="Editar esta medição"
     >
       <Pencil className="w-3 h-3" />
     </button>
   </DialogTrigger>
+
   <DialogContent>
     <DialogHeader>
       <DialogTitle>Editar Métrica</DialogTitle>
       <DialogDescription>
-        Atualize os valores da medição de <strong>{item.data}</strong>.
+                Atualize os valores da medição de <strong>
+          {item.data
+            ? new Date(item.data).toLocaleDateString("pt-BR")
+            : "Data inválida"}
+        </strong>.
       </DialogDescription>
     </DialogHeader>
-    <div className="grid gap-2 py-2">
-  <Label htmlFor="cintura-edit">Cintura (cm)</Label>
-  <Input
-    id="cintura-edit"
-    type="number"
-    defaultValue={item.cintura}
-    onChange={(e) => (item.cintura = Number(e.target.value))}
-  />
 
-  <Label htmlFor="peso-edit">Peso (kg)</Label>
-  <Input
-    id="peso-edit"
-    type="number"
-    defaultValue={item.peso}
-    onChange={(e) => (item.peso = Number(e.target.value))}
-  />
-
-  <Label htmlFor="altura-edit">Altura (cm)</Label>
-  <Input
-    id="altura-edit"
-    type="number"
-    defaultValue={item.altura}
-    onChange={(e) => (item.altura = Number(e.target.value))}
-  />
-
-  <Label htmlFor="gorduraPercentual-edit">% Gordura</Label>
-  <Input
-    id="gorduraPercentual-edit"
-    type="number"
-    defaultValue={item.gorduraPercentual}
-    onChange={(e) => (item.gorduraPercentual = Number(e.target.value))}
-  />
-
-  <Label htmlFor="imc-edit">IMC</Label>
-  <Input
-    id="imc-edit"
-    type="number"
-    defaultValue={item.imc}
-    onChange={(e) => (item.imc = Number(e.target.value))}
-  />
-
-  <Label htmlFor="rcq-edit">RCQ</Label>
-  <Input
-    id="rcq-edit"
-    type="number"
-    defaultValue={item.rcq}
-    onChange={(e) => (item.rcq = Number(e.target.value))}
-  />
-</div>
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto py-2 pr-2">
-  <div>
-    <Label htmlFor="cintura-edit">Cintura (cm)</Label>
-    <Input id="cintura-edit" type="number" defaultValue={item.cintura} onChange={(e) => (item.cintura = Number(e.target.value))} />
-  </div>
-
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto py-2 pr-2">
   <div>
     <Label htmlFor="peso-edit">Peso (kg)</Label>
-    <Input id="peso-edit" type="number" defaultValue={item.peso} onChange={(e) => (item.peso = Number(e.target.value))} />
+    <Input
+      id="peso-edit"
+      type="number"
+      defaultValue={item.peso}
+      onChange={(e) => (item.peso = Number(e.target.value))}
+    />
   </div>
 
   <div>
     <Label htmlFor="altura-edit">Altura (cm)</Label>
-    <Input id="altura-edit" type="number" defaultValue={item.altura} onChange={(e) => (item.altura = Number(e.target.value))} />
+    <Input
+      id="altura-edit"
+      type="number"
+      defaultValue={item.altura}
+      onChange={(e) => (item.altura = Number(e.target.value))}
+    />
+  </div>
+
+  <div>
+    <Label htmlFor="cintura-edit">Cintura (cm)</Label>
+    <Input
+      id="cintura-edit"
+      type="number"
+      defaultValue={item.cintura}
+      onChange={(e) => (item.cintura = Number(e.target.value))}
+    />
+  </div>
+
+  <div>
+    <Label htmlFor="quadril-edit">Quadril (cm)</Label>
+    <Input
+      id="quadril-edit"
+      type="number"
+      defaultValue={item.quadril}
+      onChange={(e) => (item.quadril = Number(e.target.value))}
+    />
+  </div>
+
+  <div>
+    <Label htmlFor="braco-edit">Braço (cm)</Label>
+    <Input
+      id="braco-edit"
+      type="number"
+      defaultValue={item.braco}
+      onChange={(e) => (item.braco = Number(e.target.value))}
+    />
   </div>
 
   <div>
     <Label htmlFor="gordura-edit">% Gordura</Label>
-    <Input id="gordura-edit" type="number" defaultValue={item.gorduraPercentual} onChange={(e) => (item.gorduraPercentual = Number(e.target.value))} />
+    <Input
+      id="gordura-edit"
+      type="number"
+      defaultValue={item.gorduraPercentual}
+      onChange={(e) => (item.gorduraPercentual = Number(e.target.value))}
+    />
   </div>
 
   <div>
-    <Label htmlFor="imc-edit">IMC</Label>
-    <Input id="imc-edit" type="number" defaultValue={item.imc} onChange={(e) => (item.imc = Number(e.target.value))} />
+    <Label htmlFor="dobras-edit">Somatório de Dobras (mm)</Label>
+    <Input
+      id="dobras-edit"
+      type="number"
+      defaultValue={item.somaDobras}
+      onChange={(e) => (item.somaDobras = Number(e.target.value))}
+    />
   </div>
 
   <div>
-    <Label htmlFor="rcq-edit">RCQ</Label>
-    <Input id="rcq-edit" type="number" defaultValue={item.rcq} onChange={(e) => (item.rcq = Number(e.target.value))} />
+    <Label htmlFor="densidade-edit">Densidade Corporal</Label>
+    <Input
+      id="densidade-edit"
+      type="text"
+      defaultValue={item.densidadeCorporal}
+      onChange={(e) => (item.densidadeCorporal = e.target.value)}
+    />
   </div>
 </div>
 
 
-
     <DialogFooter className="mt-4">
       <Button
+        disabled={isSaving}
         onClick={async () => {
+          setIsSaving(true)
           const ref = doc(db, "nutricionistas", session.user.email, "pacientes", id)
           const historicoAtualizado = patient.historicoMetricas.map((metrica: any) =>
             metrica.data === item.data ? item : metrica
@@ -1118,14 +1140,17 @@ const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => {
             historicoMetricas: historicoAtualizado,
           }))
           toast({ title: "Métrica atualizada com sucesso" })
+          setIsSaving(false)
+          setMetricaEditando(null) // fecha o modal
         }}
         className="bg-indigo-600 hover:bg-indigo-700 text-white"
       >
-        Salvar Alterações
+        {isSaving ? "Salvando..." : "Salvar Alterações"}
       </Button>
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
 
 {/* Botão de excluir */}
 <AlertDialog>
