@@ -1,14 +1,15 @@
+
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import Image from "next/image"
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogDescription, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, updateDoc,setDoc, deleteDoc, arrayUnion, arrayRemove } from "firebase/firestore"
-import { ArrowLeft, Camera, FileText, Home, LineChart, Menu, Upload, Users, Video, Trash } from "lucide-react"
+import { ArrowLeft, Camera, FileText, Home, LineChart, Menu, Upload, Users, Video, Trash, X , Pencil} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,8 +17,8 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import { storage } from "@/lib/firebase";
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet" // Corrigido: removido '}= from'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs" // Corrigido: removido '}= from'
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
 import { useToast } from "@/components/ui/use-toast"
@@ -51,13 +52,6 @@ export default function PatientDetailPage() {
   const [submitIndividualMaterialText, setSubmitIndividualMaterialText] = useState('Enviar Material');
   const [submitIndividualMaterialColorClass, setSubmitIndividualMaterialColorClass] = useState('bg-indigo-600 hover:bg-indigo-700');
 
-function formatDateToInput(dateStr: string) {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  const offsetDate = new Date(date.getTime() + Math.abs(date.getTimezoneOffset() * 60000));
-  return offsetDate.toISOString().split("T")[0];
-}
-
   const params = useParams()
   const id = decodeURIComponent(params?.id as string)
   const pathname = usePathname()
@@ -69,21 +63,32 @@ function formatDateToInput(dateStr: string) {
   const [patient, setPatient] = useState<any | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [dataNovaMetrica, setDataNovaMetrica] = useState("")
-  const [pesoNovo, setPesoNovo] = useState("")
-  const [gorduraNova, setGorduraNova] = useState("")
-  const [massaMagraNova, setMassaMagraNova] = useState("")
-  const [cinturaNova, setCinturaNova] = useState("")
-  const [quadrilNovo, setQuadrilNovo] = useState("")
-  const [toraxNovo, setToraxNovo] = useState("")
-  const [bracoNovo, setBracoNovo] = useState("")
+  const [infoParaEditar, setInfoParaEditar] = useState<any>(null)
 
-  const [abdomenNovo, setAbdomenNovo] = useState("")
-  const [coxaNovo, setCoxaNovo] = useState("")
-  const [panturrilhaNovo, setPanturrilhaNovo] = useState("")
-  const [pesoOsseoNovo, setPesoOsseoNovo] = useState("")
-  const [pesoResidualNovo, setPesoResidualNovo] = useState("")
-  const [pesoGorduraNovo, setPesoGorduraNovo] = useState("")
-  const [pesoMassaMagraNovo, setPesoMassaMagraNovo] = useState("")
+
+  // Estados para os campos de ENTRADA (base measurements)
+  const [pesoNovo, setPesoNovo] = useState("")
+  const [alturaNova, setAlturaNova] = useState("")
+  const [cinturaNovo, setCinturaNovo] = useState("") // Adicionado como input para cálculo de RCQ
+  const [quadrilNovo, setQuadrilNovo] = useState("") // Adicionado como input para cálculo de RCQ
+  const [bracoNovo, setBracoNovo] = useState("") // Adicionado como input para cálculo de CMB
+  const [gorduraPercentualNovoInput, setGorduraPercentualNovoInput] = useState("") // Input para Gordura (%)
+  const [somatorioDobrasNovo, setSomatorioDobrasNovo] = useState("")
+  const [densidadeCorporalNovoInput, setDensidadeCorporalNovoInput] = useState("") // Input para Densidade Corporal
+
+  // Estados para os campos CALCULADOS (desabilitados no formulário)
+  const [imcNovo, setImcNovo] = useState("")
+  const [classificacaoImcNovo, setClassificacaoImcNovo] = useState("")
+  const [rcqNovo, setRcqNovo] = useState("")
+  const [riscoRcqNovo, setRiscoRcqNovo] = useState("")
+  const [cmbNovo, setCmbNovo] = useState("")
+  const [classificacaoCmbNovo, setClassificacaoCmbNovo] = useState("")
+  const [classificacaoGorduraNovo, setClassificacaoGorduraNovo] = useState("")
+  const [massaGorduraNovo, setMassaGorduraNovo] = useState("")
+  const [massaResidualNovo, setMassaResidualNovo] = useState("")
+  const [massaLivreGorduraNovo, setMassaLivreGorduraNovo] = useState("")
+  const [metricaParaExcluir, setMetricaParaExcluir] = useState<any | null>(null);
+  const [isSaving, setIsSaving] = useState(false)
 
   const [editInfoOpen, setEditInfoOpen] = useState(false)
   const [editMetricsOpen, setEditMetricsOpen] = useState(false)
@@ -107,6 +112,138 @@ function formatDateToInput(dateStr: string) {
     massaMagra: 0,
     cintura: 0,
   })
+
+  // Função auxiliar para converter string com vírgula para número
+  const parseNumber = (value: string) => {
+    const cleanedValue = value.replace(',', '.');
+    // Retorna 0 se o valor for vazio ou não for um número válido após a limpeza
+    return isNaN(Number(cleanedValue)) || cleanedValue.trim() === '' ? 0 : Number(cleanedValue);
+  };
+
+  // Funções de Cálculo
+  const calculateIMC = useCallback((peso: number, altura: number) => {
+    if (peso <= 0 || altura <= 0) return 0;
+    const alturaMetros = altura / 100;
+    return peso / (alturaMetros * alturaMetros);
+  }, []);
+
+  const classifyIMC = useCallback((imc: number) => {
+    if (imc === 0) return "";
+    if (imc < 18.5) return "Baixo Peso";
+    if (imc >= 18.5 && imc <= 24.9) return "Normal";
+    if (imc >= 25 && imc <= 29.9) return "Sobrepeso";
+    if (imc >= 30 && imc <= 34.9) return "Obesidade Grau I";
+    if (imc >= 35 && imc <= 39.9) return "Obesidade Grau II";
+    return "Obesidade Grau III";
+  }, []);
+
+  const calculateRCQ = useCallback((cintura: number, quadril: number) => {
+    if (cintura <= 0 || quadril <= 0) return 0;
+    return cintura / quadril;
+  }, []);
+
+  const classifyRCQ = useCallback((rcq: number, sexo: string = 'feminino') => { // Assumindo 'feminino' como padrão ou você pode passar do paciente
+    if (rcq === 0) return "";
+    if (sexo === 'feminino') {
+      if (rcq < 0.80) return "Baixo";
+      if (rcq >= 0.80 && rcq <= 0.84) return "Moderado";
+      return "Alto";
+    } else { // Masculino
+      if (rcq < 0.90) return "Baixo";
+      if (rcq >= 0.90 && rcq <= 0.99) return "Moderado";
+      return "Alto";
+    }
+  }, []);
+
+  const calculateCMB = useCallback((braco: number) => {
+    // CMB é geralmente a medida direta do braço, mas pode ter classificações
+    return braco; // Ou adicione lógica de cálculo se for um valor derivado
+  }, []);
+
+  const classifyCMB = useCallback((cmb: number) => {
+    if (cmb === 0) return "";
+    // Exemplo de classificação simplificada para CMB (Circunferência Muscular do Braço)
+    // Valores de referência podem variar por idade, sexo, etc.
+    if (cmb < 23) return "Baixo"; // Risco de desnutrição
+    if (cmb >= 23 && cmb <= 29) return "Normal";
+    return "Alto"; // Risco de obesidade ou massa muscular elevada
+  }, []);
+
+  const classifyGordura = useCallback((gorduraPercentual: number) => {
+    if (gorduraPercentual === 0) return "";
+    // Classificação de gordura corporal (exemplo para adultos, pode variar por sexo/idade)
+    if (gorduraPercentual < 10) return "Muito Baixo";
+    if (gorduraPercentual >= 10 && gorduraPercentual <= 20) return "Adequado";
+    if (gorduraPercentual > 20 && gorduraPercentual <= 25) return "Moderado";
+    return "Elevado";
+  }, []);
+
+  // Massa de Gordura (kg) = (Gordura % / 100) * Peso (kg)
+  const calculateMassaGordura = useCallback((gorduraPercentual: number, peso: number) => {
+    if (gorduraPercentual === 0 || peso === 0) return 0;
+    return (gorduraPercentual / 100) * peso;
+  }, []);
+
+  // Massa Livre de Gordura (kg) = Peso (kg) - Massa de Gordura (kg)
+  const calculateMassaLivreGordura = useCallback((peso: number, massaGordura: number) => {
+    if (peso === 0 || massaGordura === 0) return 0;
+    return peso - massaGordura;
+  }, []);
+
+  // Massa Residual (kg) - Geralmente um percentual do peso corporal total (ex: 20-24%)
+  const calculateMassaResidual = useCallback((peso: number) => {
+    if (peso === 0) return 0;
+    return peso * 0.207; // Exemplo: 20.7% do peso
+  }, []);
+
+
+  // Efeito para recalcular métricas sempre que os inputs base mudarem
+  useEffect(() => {
+    const peso = parseNumber(pesoNovo);
+    const altura = parseNumber(alturaNova);
+    const cintura = parseNumber(cinturaNovo);
+    const quadril = parseNumber(quadrilNovo);
+    const braco = parseNumber(bracoNovo);
+    const gorduraPercentualInput = parseNumber(gorduraPercentualNovoInput);
+    const somatorioDobras = parseNumber(somatorioDobrasNovo);
+    const densidadeCorporal = parseNumber(densidadeCorporalNovoInput);
+
+    // IMC e Classificação
+    const calculatedIMC = calculateIMC(peso, altura);
+    setImcNovo(calculatedIMC > 0 ? calculatedIMC.toFixed(2).replace('.', ',') : "");
+    setClassificacaoImcNovo(classifyIMC(calculatedIMC));
+
+    // RCQ e Classificação
+    const calculatedRCQ = calculateRCQ(cintura, quadril);
+    setRcqNovo(calculatedRCQ > 0 ? calculatedRCQ.toFixed(2).replace('.', ',') : "");
+    setRiscoRcqNovo(classifyRCQ(calculatedRCQ, patient?.sexo));
+
+    // CMB e Classificação
+    const calculatedCMB = calculateCMB(braco);
+    setCmbNovo(calculatedCMB > 0 ? calculatedCMB.toFixed(2).replace('.', ',') : "");
+    setClassificacaoCmbNovo(classifyCMB(calculatedCMB));
+
+    // Classificação Gordura
+    setClassificacaoGorduraNovo(classifyGordura(gorduraPercentualInput));
+
+    // Massa de Gordura
+    const calculatedMassaGordura = calculateMassaGordura(gorduraPercentualInput, peso);
+    setMassaGorduraNovo(calculatedMassaGordura > 0 ? calculatedMassaGordura.toFixed(2).replace('.', ',') : "");
+
+    // Massa Livre de Gordura
+    const calculatedMassaLivreGordura = calculateMassaLivreGordura(peso, calculatedMassaGordura);
+    setMassaLivreGorduraNovo(calculatedMassaLivreGordura > 0 ? calculatedMassaLivreGordura.toFixed(2).replace('.', ',') : "");
+
+    // Massa Residual (se for calculada, não inputada)
+    const calculatedMassaResidual = calculateMassaResidual(peso);
+    setMassaResidualNovo(calculatedMassaResidual > 0 ? calculatedMassaResidual.toFixed(2).replace('.', ',') : "");
+
+  }, [
+    pesoNovo, alturaNova, cinturaNovo, quadrilNovo, bracoNovo, gorduraPercentualNovoInput, somatorioDobrasNovo, densidadeCorporalNovoInput,
+    calculateIMC, classifyIMC, calculateRCQ, classifyRCQ, calculateCMB, classifyCMB,
+    classifyGordura, calculateMassaGordura, calculateMassaLivreGordura, calculateMassaResidual, patient?.sexo
+  ]);
+
 
   // Função para upload de fotos (existente)
   const uploadPhoto = async (file: File, patientId: string, imageName: string) => {
@@ -408,6 +545,27 @@ try {
     toast({ title: "Informações atualizadas com sucesso" })
     setEditInfoOpen(false)
   }
+// ⬆️ ANTES do return
+const excluirMetrica = async (data: string) => {
+  if (!session?.user?.email || !patient) return;
+
+  const historicoAtualizado = (patient.historicoMetricas || []).filter(
+    (metrica: any) => metrica.data !== data
+  );
+
+  const refPaciente = doc(db, "nutricionistas", session.user?.email, "pacientes", id);
+
+  await updateDoc(refPaciente, {
+    historicoMetricas: historicoAtualizado,
+  });
+
+  setPatient((prev: any) => ({
+    ...prev,
+    historicoMetricas: historicoAtualizado,
+  }));
+
+  toast({ title: "Métrica excluída com sucesso" });
+};
 
   const handleSaveMetrics = async () => {
     if (!session?.user?.email) return
@@ -449,22 +607,33 @@ try {
   const salvarNovaMetrica = async () => {
   if (!session?.user?.email || !patient) return;
 
+  // Função auxiliar para converter string com vírgula para número
+  const parseNumber = (value: string) => {
+    const cleanedValue = value.replace(',', '.');
+    // Retorna 0 se o valor for vazio ou não for um número válido após a limpeza
+    return isNaN(Number(cleanedValue)) || cleanedValue.trim() === '' ? 0 : Number(cleanedValue);
+  };
+
   const novaMetrica = {
     data: dataNovaMetrica,
-    peso: Number(pesoNovo),
-    gordura: Number(gorduraNova),
-    massaMagra: Number(massaMagraNova),
-    cintura: Number(cinturaNova),
-    quadril: Number(quadrilNovo),
-    torax: Number(toraxNovo),
-    braco: Number(bracoNovo),
-    abdomen: Number(abdomenNovo),
-    coxa: Number(coxaNovo),
-    panturrilha: Number(panturrilhaNovo),
-    pesoOsseo: Number(pesoOsseoNovo),
-    pesoResidual: Number(pesoResidualNovo),
-    pesoGordura: Number(pesoGorduraNovo),
-    pesoMassaMagra: Number(pesoMassaMagraNovo),
+    peso: parseNumber(pesoNovo),
+    altura: parseNumber(alturaNova),
+    cintura: parseNumber(cinturaNovo), // Incluído
+    quadril: parseNumber(quadrilNovo), // Incluído
+    braco: parseNumber(bracoNovo),     // Incluído
+    somatorioDobras: parseNumber(somatorioDobrasNovo), // Incluído
+    densidadeCorporal: parseNumber(densidadeCorporalNovoInput), // Incluído
+    imc: parseNumber(imcNovo),
+    classificacaoImc: classificacaoImcNovo,
+    rcq: parseNumber(rcqNovo),
+    riscoRcq: riscoRcqNovo,
+    cmb: parseNumber(cmbNovo),
+    classificacaoCmb: classificacaoCmbNovo,
+    gorduraPercentual: parseNumber(gorduraPercentualNovoInput),
+    classificacaoGordura: classificacaoGorduraNovo,
+    massaGordura: parseNumber(massaGorduraNovo),
+    massaResidual: parseNumber(massaResidualNovo),
+    massaLivreGordura: parseNumber(massaLivreGorduraNovo),
   };
 
   const refPaciente = doc(db, "nutricionistas", session.user.email, "pacientes", id);
@@ -479,64 +648,91 @@ try {
     historicoMetricas: historicoAtualizado,
   }));
 
-  // Resetar campos
+  // Resetar campos de entrada
   setDataNovaMetrica("");
   setPesoNovo("");
-  setGorduraNova("");
-  setMassaMagraNova("");
-  setCinturaNova("");
+  setAlturaNova("");
+  setCinturaNovo("");
   setQuadrilNovo("");
-  setToraxNovo("");
   setBracoNovo("");
-  setAbdomenNovo("");
-  setCoxaNovo("");
-  setPanturrilhaNovo("");
-  setPesoOsseoNovo("");
-  setPesoResidualNovo("");
-  setPesoGorduraNovo("");
-  setPesoMassaMagraNovo("");
+  setGorduraPercentualNovoInput("");
+  setSomatorioDobrasNovo("");
+  setDensidadeCorporalNovoInput("");
+
+  // Resetar campos calculados (para limpar o formulário)
+  setImcNovo("");
+  setClassificacaoImcNovo("");
+  setRcqNovo("");
+  setRiscoRcqNovo("");
+  setCmbNovo("");
+  setClassificacaoCmbNovo("");
+  setClassificacaoGorduraNovo("");
+  setMassaGorduraNovo("");
+  setMassaResidualNovo("");
+  setMassaLivreGorduraNovo("");
+
 
   toast({ title: "Nova métrica adicionada com sucesso" });
 };
 
-
-  const excluirMetrica = async (data: string) => {
-  if (!session?.user?.email || !patient) return;
-
-  // Abrir modal de confirmação com AlertDialog
-  const confirmarExclusao = window.confirm("Tem certeza que deseja excluir esta métrica? Essa ação não pode ser desfeita.");
-  if (!confirmarExclusao) return;
-
-  const historicoAtualizado = (patient.historicoMetricas || []).filter(
-    (metrica: any) => metrica.data !== data
-  );
-
-  const refPaciente = doc(db, "nutricionistas", session.user.email, "pacientes", id);
-
-  await updateDoc(refPaciente, {
-    historicoMetricas: historicoAtualizado,
-  });
-
-  setPatient((prev: any) => ({
-    ...prev,
-    historicoMetricas: historicoAtualizado,
-  }));
-
-  toast({ title: "Métrica excluída com sucesso" });
-};
-const formatarTelefone = (telefone: string) => {
-  const apenasNumeros = telefone?.replace(/\D/g, "");
-  if (apenasNumeros?.length === 11) {
-    return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => { 
+  if (!session?.user?.email || !patient) {
+    console.error("Autenticação ou dados do paciente ausentes para a operação de exclusão.");
+    return;
   }
-  return telefone;
+
+  console.log("Tentando excluir entrada de métrica:", metricToDelete);
+  console.log("Histórico de métricas atual (antes do filtro):", JSON.parse(JSON.stringify(patient.historicoMetricas)));
+
+  toast({
+    title: "Confirmar Exclusão da Coluna de Métrica",
+    description: `Tem certeza que deseja excluir a coluna de métricas da data ${metricToDelete.data}? Essa ação não pode ser desfeita.`,
+    action: (
+      <Button
+        variant="destructive"
+        onClick={async () => {
+          try {
+            // O caminho completo para o documento do paciente
+            const refPaciente = doc(dbInstance, "nutricionistas", session.user.email, "pacientes", id);
+
+            // Filtra o histórico para remover a entrada com base em múltiplos campos para maior precisão.
+            // Se você tiver um ID único para cada métrica, use-o para uma comparação ainda mais robusta!
+            const historicoAtualizado = (patient.historicoMetricas || []).filter(
+              (metrica: MetricaEntry) => {
+                // Compara a data E o peso. Adicione outros campos se necessário para garantir unicidade.
+                const isMatch = metrica.data === metricToDelete.data && metrica.peso === metricToDelete.peso;
+                console.log(`Comparando stored: ${metrica.data} (${metrica.peso}) com target: ${metricToDelete.data} (${metricToDelete.peso}): ${isMatch}`);
+                return !isMatch; // Retorna true para manter, false para remover
+              }
+            );
+
+            console.log("historicoAtualizado (após filtro):", JSON.parse(JSON.stringify(historicoAtualizado)));
+
+            // ESTA É A LINHA QUE ATUALIZA O FIREBASE COM O ARRAY FILTRADO
+            await updateDoc(refPaciente, {
+              historicoMetricas: historicoAtualizado,
+            });
+
+            // Atualiza o estado local para refletir a mudança na UI
+            setPatient((prev: any) => ({
+              ...prev,
+              historicoMetricas: historicoAtualizado,
+            }));
+
+            toast({ title: "Coluna de métrica excluída com sucesso" });
+            console.log("Métrica excluída com sucesso do Firestore e estado local.");
+          } catch (error) {
+            console.error("Erro durante a exclusão da métrica no Firestore:", error);
+            toast({ title: "Erro ao excluir métrica", description: "Não foi possível remover a coluna. Verifique o console para detalhes." });
+          }
+        }}
+      >
+        Excluir
+      </Button>
+    ),
+  });
 };
-const formatarData = (data: string) => {
-  if (!data) return "";
-  const date = new Date(data);
-  if (isNaN(date.getTime())) return data;
-  return date.toLocaleDateString("pt-BR");
-};
+  
 
   return (
     <div className="flex min-h-screen">
@@ -660,11 +856,11 @@ const formatarData = (data: string) => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-                  <p>{formatarTelefone(patient?.telefone)}</p>
+                  <p>{patient?.telefone}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
-                  <p>{formatarData(patient?.birthdate)}</p>
+                  <p>{patient?.birthdate}</p>
                 </div>
                
               </CardContent>
@@ -681,11 +877,9 @@ const formatarData = (data: string) => {
   <div className="grid gap-1">
     <Label>Nome</Label>
     <Input
-     type="date"
-     value={editData.birthdate ? new Date(new Date(editData.birthdate).getTime() - 86400000).toISOString().split("T")[0] : ""}
-     onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
+      value={editData.name}
+      onChange={(e) => setEditData({ ...editData, name: e.target.value })}
     />
-
   </div>
 
   <div className="grid gap-1">
@@ -713,23 +907,37 @@ const formatarData = (data: string) => {
   <div className="grid gap-1">
     <Label>Data de Nascimento</Label>
     <Input
-        type="date"
-        value={formatDateToInput(editData.birthdate)}
-        onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
-      />
-
+      type="date"
+      value={editData.birthdate}
+      onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })}
+    />
   </div>
 </div>
 
                 </div>
-                <DialogFooter className="mt-4">
-                  <Button
-                    onClick={handleSaveInfo}
-                    className="bg-indigo-600 text-white hover:bg-indigo-700"
-                  >
-                    Salvar
-                  </Button>
-                </DialogFooter>
+               <DialogFooter className="mt-4">
+  <Button
+    type="button"
+    onClick={async () => {
+      setIsSaving(true)
+      await handleSaveInfo()
+      setIsSaving(false)
+      setInfoParaEditar(null) // Fecha o popup
+
+      toast({
+        title: "Sucesso",
+        description: "Métrica atualizada com sucesso!",
+      })
+    }}
+    disabled={isSaving}
+    className="bg-indigo-600 text-white hover:bg-indigo-700"
+  >
+    {isSaving ? "Salvando..." : "Salvar"}
+  </Button>
+</DialogFooter>
+
+
+
               </DialogContent>
             </Dialog>
 
@@ -784,26 +992,191 @@ const formatarData = (data: string) => {
                     {patient?.historicoMetricas?.length > 0 ? (
                       <div className="overflow-x-auto">
                       <table className="w-full text-sm text-left border">
-                       <thead className="bg-muted">
+                <thead className="bg-muted">
   <tr>
     <th className="text-left p-2">Métrica</th>
     {patient.historicoMetricas.map((item: any, index: number) => (
-  <th key={index} className="text-center p-2 font-semibold">
-    {item.data && !isNaN(new Date(item.data).getTime())
-  ? new Date(item.data).toLocaleDateString("pt-BR")
-  : "Sem data"}
+      <th key={index} className="text-center p-2 font-semibold">
+        <div className="flex items-center justify-center gap-1">
+          <span>
+            {item.data && !isNaN(new Date(item.data).getTime())
+              ? new Date(item.data).toLocaleDateString("pt-BR")
+              : "Sem data"}
+          </span>
 
-  </th>
-))}
+{/* Botão de editar */}
+<Dialog>
+  <DialogTrigger asChild>
+    <button
+      onClick={() => setMetricaParaExcluir(item)}
+      className="text-blue-500 hover:text-blue-700 text-xs font-bold leading-none"
+      title="Editar esta medição"
+    >
+      <Pencil className="w-3 h-3" />
+    </button>
+  </DialogTrigger>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Editar Métrica</DialogTitle>
+      <DialogDescription>
+        Atualize os valores da medição de <strong>{item.data}</strong>.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="grid gap-2 py-2">
+  <Label htmlFor="cintura-edit">Cintura (cm)</Label>
+  <Input
+    id="cintura-edit"
+    type="number"
+    defaultValue={item.cintura}
+    onChange={(e) => (item.cintura = Number(e.target.value))}
+  />
 
+  <Label htmlFor="peso-edit">Peso (kg)</Label>
+  <Input
+    id="peso-edit"
+    type="number"
+    defaultValue={item.peso}
+    onChange={(e) => (item.peso = Number(e.target.value))}
+  />
+
+  <Label htmlFor="altura-edit">Altura (cm)</Label>
+  <Input
+    id="altura-edit"
+    type="number"
+    defaultValue={item.altura}
+    onChange={(e) => (item.altura = Number(e.target.value))}
+  />
+
+  <Label htmlFor="gorduraPercentual-edit">% Gordura</Label>
+  <Input
+    id="gorduraPercentual-edit"
+    type="number"
+    defaultValue={item.gorduraPercentual}
+    onChange={(e) => (item.gorduraPercentual = Number(e.target.value))}
+  />
+
+  <Label htmlFor="imc-edit">IMC</Label>
+  <Input
+    id="imc-edit"
+    type="number"
+    defaultValue={item.imc}
+    onChange={(e) => (item.imc = Number(e.target.value))}
+  />
+
+  <Label htmlFor="rcq-edit">RCQ</Label>
+  <Input
+    id="rcq-edit"
+    type="number"
+    defaultValue={item.rcq}
+    onChange={(e) => (item.rcq = Number(e.target.value))}
+  />
+</div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto py-2 pr-2">
+  <div>
+    <Label htmlFor="cintura-edit">Cintura (cm)</Label>
+    <Input id="cintura-edit" type="number" defaultValue={item.cintura} onChange={(e) => (item.cintura = Number(e.target.value))} />
+  </div>
+
+  <div>
+    <Label htmlFor="peso-edit">Peso (kg)</Label>
+    <Input id="peso-edit" type="number" defaultValue={item.peso} onChange={(e) => (item.peso = Number(e.target.value))} />
+  </div>
+
+  <div>
+    <Label htmlFor="altura-edit">Altura (cm)</Label>
+    <Input id="altura-edit" type="number" defaultValue={item.altura} onChange={(e) => (item.altura = Number(e.target.value))} />
+  </div>
+
+  <div>
+    <Label htmlFor="gordura-edit">% Gordura</Label>
+    <Input id="gordura-edit" type="number" defaultValue={item.gorduraPercentual} onChange={(e) => (item.gorduraPercentual = Number(e.target.value))} />
+  </div>
+
+  <div>
+    <Label htmlFor="imc-edit">IMC</Label>
+    <Input id="imc-edit" type="number" defaultValue={item.imc} onChange={(e) => (item.imc = Number(e.target.value))} />
+  </div>
+
+  <div>
+    <Label htmlFor="rcq-edit">RCQ</Label>
+    <Input id="rcq-edit" type="number" defaultValue={item.rcq} onChange={(e) => (item.rcq = Number(e.target.value))} />
+  </div>
+</div>
+
+
+
+    <DialogFooter className="mt-4">
+      <Button
+        onClick={async () => {
+          const ref = doc(db, "nutricionistas", session.user.email, "pacientes", id)
+          const historicoAtualizado = patient.historicoMetricas.map((metrica: any) =>
+            metrica.data === item.data ? item : metrica
+          )
+          await updateDoc(ref, { historicoMetricas: historicoAtualizado })
+          setPatient((prev: any) => ({
+            ...prev,
+            historicoMetricas: historicoAtualizado,
+          }))
+          toast({ title: "Métrica atualizada com sucesso" })
+        }}
+        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+      >
+        Salvar Alterações
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+{/* Botão de excluir */}
+<AlertDialog>
+  <AlertDialogTrigger asChild>
+    <button
+      onClick={() => setMetricaParaExcluir(item)}
+      className="text-red-500 hover:text-red-700 text-xs font-bold leading-none"
+      title="Excluir esta medição"
+    >
+      ×
+    </button>
+  </AlertDialogTrigger>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Excluir Métrica</AlertDialogTitle>
+      <AlertDialogDescription>
+        Tem certeza que deseja excluir a métrica do dia {item.data}?
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+      <AlertDialogAction
+        className="bg-red-600 hover:bg-red-700 text-white"
+        onClick={() => {
+          excluirMetrica(item.data)
+          setMetricaParaExcluir(null)
+        }}
+      >
+        Excluir
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+
+         
+
+        </div>
+      </th>
+    ))}
   </tr>
 </thead>
+
 
                         <tbody>
                           
 {[
   { label: "Peso atual (Kg)", key: "peso" },
   { label: "Altura atual (cm)", key: "altura" },
+  { label: "Cintura (cm)", key: "cintura" },
+  { label: "Quadril (cm)", key: "quadril" },
+  { label: "Braço (cm)", key: "braco" },
   { label: "IMC (Kg/m²)", key: "imc" },
   { label: "Classificação do IMC", key: "classificacaoImc" },
   { label: "RCQ", key: "rcq" },
@@ -821,16 +1194,16 @@ const formatarData = (data: string) => {
   <tr key={key} className="border-b hover:bg-muted/50">
     <td className="p-2 font-medium">{label}</td>
     {patient.historicoMetricas.map((item: any, index: number) => (
-      <td key={index} className="p-2 text-center">{item[key] ?? "-"}</td>
+      <td key={index} className="p-2 text-center">
+  {item[key] === 0 || item[key] === "" || item[key] == null ? "-" : item[key]}
+</td>
+
     ))}
   </tr>
 ))}
-
-
-
                         </tbody>
                       </table>
-</div>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Nenhuma métrica registrada ainda.</p>
                     )}
@@ -853,41 +1226,188 @@ const formatarData = (data: string) => {
                         />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {/* Campos da Nova Medição - Organizados em grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* Peso */}
                         <div className="grid gap-2">
-                          <Label>Peso (kg)</Label>
+                          <Label>Peso</Label>
                           <Input
-                            type="number"
-                            placeholder="70.5"
-                            value={pesoNovo}
-                            onChange={(e) => setPesoNovo(e.target.value)}
+                            type="text"
+                            placeholder="70,5 kg"
+                            value={pesoNovo.replace('.', ',')}
+                            onChange={(e) => setPesoNovo(e.target.value.replace(',', '.'))}
                           />
                         </div>
+                        {/* Altura */}
                         <div className="grid gap-2">
-                          <Label>Percentual de Gordura (%)</Label>
+                          <Label>Altura</Label>
                           <Input
-                            type="number"
-                            placeholder="22.5"
-                            value={gorduraNova}
-                            onChange={(e) => setGorduraNova(e.target.value)}
+                            type="text"
+                            placeholder="170 cm"
+                            value={alturaNova.replace('.', ',')}
+                            onChange={(e) => setAlturaNova(e.target.value.replace(',', '.'))}
                           />
                         </div>
+                        {/* Cintura - Adicionado como input para cálculo de RCQ */}
                         <div className="grid gap-2">
-                          <Label>Percentual de Massa Magra (%)</Label>
+                          <Label>Cintura</Label>
                           <Input
-                            type="number"
-                            placeholder="77.5"
-                            value={massaMagraNova}
-                            onChange={(e) => setMassaMagraNova(e.target.value)}
+                            type="text"
+                            placeholder="82 cm"
+                            value={cinturaNovo.replace('.', ',')}
+                            onChange={(e) => setCinturaNovo(e.target.value.replace(',', '.'))}
                           />
                         </div>
+                        {/* Quadril - Adicionado como input para cálculo de RCQ */}
                         <div className="grid gap-2">
-                          <Label>Cintura (cm)</Label>
+                          <Label>Quadril</Label>
                           <Input
-                            type="number"
-                            placeholder="82"
-                            value={cinturaNova}
-                            onChange={(e) => setCinturaNova(e.target.value)}
+                            type="text"
+                            placeholder="95 cm"
+                            value={quadrilNovo.replace('.', ',')}
+                            onChange={(e) => setQuadrilNovo(e.target.value.replace(',', '.'))}
+                          />
+                        </div>
+                        {/* Braço - Adicionado como input para cálculo de CMB */}
+                        <div className="grid gap-2">
+                          <Label>Braço</Label>
+                          <Input
+                            type="text"
+                            placeholder="30 cm"
+                            value={bracoNovo.replace('.', ',')}
+                            onChange={(e) => setBracoNovo(e.target.value.replace(',', '.'))}
+                          />
+                        </div>
+                        {/* Gordura Percentual */}
+                        <div className="grid gap-2">
+                          <Label>Gordura</Label>
+                          <Input
+                            type="text"
+                            placeholder="22,5 %"
+                            value={gorduraPercentualNovoInput.replace('.', ',')}
+                            onChange={(e) => setGorduraPercentualNovoInput(e.target.value.replace(',', '.'))}
+                          />
+                        </div>
+                        {/* Somatório de Dobras */}
+                        <div className="grid gap-2">
+                          <Label>Somatório de Dobras</Label>
+                          <Input
+                            type="text"
+                            placeholder="120 mm"
+                            value={somatorioDobrasNovo.replace('.', ',')}
+                            onChange={(e) => setSomatorioDobrasNovo(e.target.value.replace(',', '.'))}
+                          />
+                        </div>
+                        {/* Densidade Corporal */}
+                        <div className="grid gap-2">
+                          <Label>Densidade Corporal</Label>
+                          <Input
+                            type="text"
+                            placeholder="1,07 g/mL"
+                            value={densidadeCorporalNovoInput.replace('.', ',')}
+                            onChange={(e) => setDensidadeCorporalNovoInput(e.target.value.replace(',', '.'))}
+                          />
+                        </div>
+
+                        {/* CAMPOS CALCULADOS - DESABILITADOS */}
+                        {/* IMC */}
+                        <div className="grid gap-2">
+                          <Label>IMC</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={imcNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Classificação IMC */}
+                        <div className="grid gap-2">
+                          <Label>Classificação IMC</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={classificacaoImcNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* RCQ */}
+                        <div className="grid gap-2">
+                          <Label>RCQ</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={rcqNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Risco por RCQ */}
+                        <div className="grid gap-2">
+                          <Label>Risco por RCQ</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={riscoRcqNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* CMB */}
+                        <div className="grid gap-2">
+                          <Label>CMB</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={cmbNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Classificação CMB */}
+                        <div className="grid gap-2">
+                          <Label>Classificação CMB</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={classificacaoCmbNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Classificação Gordura */}
+                        <div className="grid gap-2">
+                          <Label>Classificação Gordura</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={classificacaoGorduraNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Massa de Gordura */}
+                        <div className="grid gap-2">
+                          <Label>Massa de Gordura</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={massaGorduraNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Massa Residual */}
+                        <div className="grid gap-2">
+                          <Label>Massa Residual</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={massaResidualNovo}
+                            disabled // Desabilitado
+                          />
+                        </div>
+                        {/* Massa Livre de Gordura */}
+                        <div className="grid gap-2">
+                          <Label>Massa Livre de Gordura</Label>
+                          <Input
+                            type="text"
+                            placeholder="Calculado"
+                            value={massaLivreGorduraNovo}
+                            disabled // Desabilitado
                           />
                         </div>
                       </div>
@@ -916,6 +1436,7 @@ const formatarData = (data: string) => {
                     <CardDescription>Faça upload de dietas em PDF para o paciente</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    <form onSubmit={handleReplaceDiet}>
                       <div className="flex flex-col gap-4 max-w-xl mx-auto">
                         <div className="grid gap-2">
                           <Label>Nome da Dieta</Label>
@@ -959,8 +1480,7 @@ const formatarData = (data: string) => {
                         <div className="flex justify-center mt-4">
                           <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
                             <Button
-                              type="button" // ← IMPORTANTE: muda de submit para button
-                              onClick={handleReplaceDiet} // ← CHAMA A FUNÇÃO DIRETAMENTE
+                              type="submit"
                               className={`w-full text-white ${submitButtonColorClass}`}
                               disabled={!selectedPDF || isSubmittingDiet}
                             >
@@ -969,7 +1489,7 @@ const formatarData = (data: string) => {
                           </div>
                         </div>
                       </div>
-                    
+                    </form>
                   </CardContent>
                 </Card>
                 {patient?.dietas?.length > 0 && (
@@ -1045,6 +1565,15 @@ const formatarData = (data: string) => {
                             </label>
                           </div>
                         </div>
+                        {selectedPhotos.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {selectedPhotos.map((file, index) => (
+                              <span key={index} className="text-sm text-blue-600">
+                                {file.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {/* Botão Enviar Fotos - Ajustado para ter o mesmo tamanho */}
                         <div className="flex justify-center mt-4">
                           <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
