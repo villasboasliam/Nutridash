@@ -2,6 +2,7 @@
 
 export const runtime = "nodejs" // 👈 FORÇA USO DE NODEJS E EVITA ERRO COM crypto.randomBytes
 
+import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { getFirestoreAdmin, getAuthAdmin, admin } from "@/lib/firebase-admin"
 import nodemailer from "nodemailer"
