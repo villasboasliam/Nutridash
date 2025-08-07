@@ -1,3 +1,7 @@
+// app/api/createPatient/route.ts
+
+export const runtime = "nodejs" // 👈 FORÇA USO DE NODEJS E EVITA ERRO COM crypto.randomBytes
+
 import { NextRequest, NextResponse } from "next/server"
 import { getFirestoreAdmin, getAuthAdmin, admin } from "@/lib/firebase-admin"
 import nodemailer from "nodemailer"
@@ -6,7 +10,6 @@ export async function POST(req: NextRequest) {
   const db = getFirestoreAdmin()
   const auth = getAuthAdmin()
 
-  // Segurança
   if (!db || !auth) {
     console.error("❌ Firebase Admin SDK não disponível.")
     return NextResponse.json({ error: "Serviço indisponível." }, { status: 500 })
@@ -21,11 +24,11 @@ export async function POST(req: NextRequest) {
     // 🔐 Criação do usuário no Firebase Auth
     const userRecord = await auth.createUser({
       email: cleanEmail,
-      password: crypto.randomBytes(16).toString("base64url"), // não usada, só exigência do Firebase
+      password: crypto.randomBytes(16).toString("base64url"), // apenas exigência do Firebase
     })
     console.log("✅ Usuário criado:", userRecord.uid)
 
-    // 📬 Geração do link de redefinição de senha
+    // 📬 Link de redefinição de senha
     const resetLink = await auth.generatePasswordResetLink(cleanEmail)
     console.log("🔗 Link de redefinição gerado:", resetLink)
 
@@ -43,9 +46,10 @@ export async function POST(req: NextRequest) {
         isFirstLogin: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+
     console.log("✅ Dados do paciente gravados no Firestore.")
 
-    // ✉️ Envio de e-mail via Nodemailer
+    // ✉️ E-mail via Nodemailer
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -77,4 +81,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message || "Erro interno." }, { status: 500 })
   }
 }
-
