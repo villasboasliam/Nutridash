@@ -1,37 +1,43 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getFirestoreAdmin, getAuthAdmin, admin } from "@/lib/firebase-admin" // admin para FieldValue e auth() direto
-import crypto from "crypto"
+import { getFirestoreAdmin, getAuthAdmin, admin } from "@/lib/firebase-admin"
 import nodemailer from "nodemailer"
 
 export async function POST(req: NextRequest) {
   const db = getFirestoreAdmin()
   const auth = getAuthAdmin()
 
-  // Verificação de segurança
+  // Segurança
   if (!db || !auth) {
-    console.error("❌ Serviços do Firebase Admin SDK não estão disponíveis.")
-    return NextResponse.json({ error: "Serviço indisponível. Tente novamente mais tarde." }, { status: 500 })
+    console.error("❌ Firebase Admin SDK não disponível.")
+    return NextResponse.json({ error: "Serviço indisponível." }, { status: 500 })
   }
 
   const { nome, email, telefone, nutricionistaId } = await req.json()
-  console.log("📥 Payload createPatient:", { nome, email, telefone, nutricionistaId })
 
-  const tempPassword = crypto.randomBytes(6).toString("base64url")
-  console.log("🔑 Senha temporária:", tempPassword)
+  const cleanEmail = email.trim().toLowerCase()
+  console.log("📥 Payload:", { nome, cleanEmail, telefone, nutricionistaId })
 
   try {
-    console.log("⏳ Criando usuário no Firebase Auth...")
-    const userRecord = await auth.createUser({ email, password: tempPassword })
+    // 🔐 Criação do usuário no Firebase Auth
+    const userRecord = await auth.createUser({
+      email: cleanEmail,
+      password: crypto.randomBytes(16).toString("base64url"), // não usada, só exigência do Firebase
+    })
     console.log("✅ Usuário criado:", userRecord.uid)
 
+    // 📬 Geração do link de redefinição de senha
+    const resetLink = await auth.generatePasswordResetLink(cleanEmail)
+    console.log("🔗 Link de redefinição gerado:", resetLink)
+
+    // 📁 Salvando dados no Firestore
     await db
       .collection("nutricionistas")
       .doc(nutricionistaId)
       .collection("pacientes")
-      .doc(email)
+      .doc(cleanEmail)
       .set({
         nome,
-        email,
+        email: cleanEmail,
         telefone,
         uid: userRecord.uid,
         isFirstLogin: true,
@@ -39,12 +45,7 @@ export async function POST(req: NextRequest) {
       })
     console.log("✅ Dados do paciente gravados no Firestore.")
 
-    console.log("🔌 Configurando Nodemailer com:", {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      user: process.env.SMTP_USER,
-    })
-
+    // ✉️ Envio de e-mail via Nodemailer
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
@@ -55,27 +56,25 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    console.log(`✉️  Enviando e-mail para ${email}...`)
     await transporter.sendMail({
       from: `"NutriDash" <${process.env.EMAIL_FROM}>`,
-      to: email,
-      subject: "Seja bem-vindo — sua senha temporária",
+      to: cleanEmail,
+      subject: "Crie sua senha no NutriDash",
       html: `
-        <h2>Bem-vindo ao NutriDash</h2>
-        <p>${nome}, você foi cadastrado pela sua nutricionista.</p>
-        <p>Clique no botão abaixo para criar sua senha e acessar o aplicativo:</p>
-        <ul>
-          <li><b>E-mail:</b> ${email}</li>
-          <li><b>Senha temporária:</b> ${tempPassword}</li>
-        </ul>
-        <p>Ao entrar no app, você será solicitado a escolher uma nova senha.</p>
+        <h2>Olá, ${nome}!</h2>
+        <p>Você foi cadastrado pela sua nutricionista no NutriDash.</p>
+        <p>Clique no botão abaixo para criar sua senha e acessar o app:</p>
+        <p><a href="${resetLink}" style="background-color:#6366f1;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;">Criar minha senha</a></p>
+        <p>Se já tiver uma senha, basta acessar normalmente com seu e-mail.</p>
       `,
     })
-    console.log("✅ E-mail enviado com sucesso!")
+
+    console.log("✅ E-mail enviado com sucesso para:", cleanEmail)
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
-    console.error("❌ Erro ao criar paciente ou enviar e-mail:", err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error("❌ Erro ao criar paciente:", err)
+    return NextResponse.json({ error: err.message || "Erro interno." }, { status: 500 })
   }
 }
+
