@@ -114,6 +114,18 @@ export default function PatientDetailPage() {
     birthdate: "",
     valorConsulta: "",
   })
+  
+useEffect(() => {
+  if (patient) {
+    setEditData({
+      name: patient.nome || "",
+      email: patient.email || "",
+      telefone: patient.telefone || "",
+      birthdate: patient.birthdate || "",
+      valorConsulta: patient.valorConsulta || "",
+    });
+  }
+}, [patient]);
 
   const [editMetrics, setEditMetrics] = useState({
     peso: 0,
@@ -672,13 +684,13 @@ useEffect(() => {
   if (!user?.email) return  // agora só continua se estiver autenticado
 
   const ref = doc(db, "nutricionistas", user.email, "pacientes", id);
-  await updateDoc(ref, {
-    nome: editData.name,
-    email: editData.email,
-    telefone: editData.telefone,
-    birthdate: editData.birthdate,
-    valorConsulta: editData.valorConsulta,
-  })
+ await updateDoc(ref, {
+  nome: editData.name,
+  telefone: editData.telefone,
+  birthdate: editData.birthdate,
+  valorConsulta: editData.valorConsulta,
+});
+
 
   setPatient((prev: any) => ({ ...prev, ...editData }))
   toast({ title: "Informações atualizadas com sucesso" })
@@ -714,7 +726,7 @@ const excluirMetrica = async (data: string) => {
 
 
   const handleSaveMetrics = async () => {
-    if (user?.email) return
+    if (!user?.email) return
     const ref = doc(db, "nutricionistas", user.email, "pacientes", id)
     await updateDoc(ref, {
       peso_atual: editMetrics.peso,
@@ -729,7 +741,7 @@ const excluirMetrica = async (data: string) => {
   }
 
   const handleDeletePatient = async () => {
-    if (user?.email) return
+    if (!user?.email) return
     const ref = doc(db, "nutricionistas", user.email, "pacientes", id)
     await deleteDoc(ref)
     toast({
@@ -1042,9 +1054,11 @@ const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => {
   <div className="grid gap-1">
     <Label>Email</Label>
     <Input
-      value={editData.email}
-      onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-    />
+  value={editData.email}
+  disabled
+  className="opacity-60 cursor-not-allowed"
+/>
+
   </div>
 
   <div className="grid gap-1">
