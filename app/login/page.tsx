@@ -1,232 +1,124 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, LineChart } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "@/components/ui/use-toast";
+import Link from "next/link";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { FcGoogle } from "react-icons/fc"; // Ícone do Google
 
-import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
-import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-
-export default function CadastroPage() {
-  const [name, setName] = useState("");
+export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const router = useRouter();
-  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
+    setErrorMessage(null);
 
     try {
-      // 🔐 Cria usuário no Firebase Auth (email/senha)
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
-
-      // 🗂️ Salva dados no Firestore com ID = UID
-      await setDoc(doc(db, "nutricionistas", uid), {
-        nome: name,
-        email,
-        plano: "teste",
-        assinatura_ativa: false,
-        data_criacao: serverTimestamp(),
-        provedor: "password",
-      });
-
-      toast({
-        title: "Cadastro realizado!",
-        description: "Sua conta foi criada com sucesso. Faça login.",
-      });
-
-      router.push("/login");
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: "Login realizado", description: "Redirecionando..." });
+      router.push("/pacientes");
     } catch (error: any) {
-      console.error("Erro ao cadastrar:", error);
-      toast({
-        title: "Erro no cadastro",
-        description: error.message || "Tente novamente.",
-        variant: "destructive",
-      });
+      console.error("Erro de login:", error);
+      setErrorMessage("E-mail ou senha incorretos");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true);
+    setLoading(true);
+    setErrorMessage(null);
+
     try {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // 🗂️ Cria doc no Firestore se não existir (ID = UID)
-      const ref = doc(db, "nutricionistas", user.uid);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        await setDoc(ref, {
-          nome: user.displayName ?? "",
-          email: user.email ?? "",
-          plano: "teste",
-          assinatura_ativa: false,
-          data_criacao: serverTimestamp(),
-          provedor: "google",
-        });
-      }
-
-      toast({
-        title: "Login realizado!",
-        description: "Bem-vindo(a) ao NutriDash.",
-      });
-
-      router.push("/"); // ajuste o destino conforme sua UX (ex: /dashboard)
+      await signInWithPopup(auth, provider);
+      toast({ title: "Login com Google realizado", description: "Redirecionando..." });
+      router.push("/pacientes");
     } catch (error: any) {
       console.error("Erro no login com Google:", error);
-      toast({
-        title: "Não foi possível entrar com Google",
-        description: error.message || "Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro no login com Google", description: "Tente novamente." });
     } finally {
-      setIsGoogleLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/40">
-      <header className="flex h-14 items-center px-4 lg:px-6 border-b bg-background">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-          <LineChart className="h-5 w-5" />
-          <span>NutriDash</span>
-        </Link>
-        <div className="ml-auto flex items-center gap-2">
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="flex-1 flex items-center justify-center p-4 md:p-8">
-        <Card className="mx-auto max-w-md w-full">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold">Criar conta</CardTitle>
-            <CardDescription>Preencha os dados abaixo para se cadastrar como nutricionista</CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            {/* Botão Google */}
-            <div className="space-y-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleGoogleLogin}
-                disabled={isGoogleLoading || isLoading}
-              >
-                {isGoogleLoading ? "Conectando…" : "Continuar com Google"}
-              </Button>
-
-              <div className="flex items-center gap-2 my-2">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">ou</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Entrar no NutriDash</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="email" className="block text-sm font-medium">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="exemplo@nutridash.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-
-            {/* Form email/senha */}
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome completo</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Seu nome"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    <span className="sr-only">{showPassword ? "Esconder senha" : "Mostrar senha"}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox id="terms" required />
-                <Label htmlFor="terms" className="text-sm">
-                  Eu concordo com os{" "}
-                  <Link href="#" className="text-indigo-600 hover:text-indigo-700">Termos de Serviço</Link> e{" "}
-                  <Link href="#" className="text-indigo-600 hover:text-indigo-700">Política de Privacidade</Link>
-                </Label>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-                disabled={isLoading || isGoogleLoading}
-              >
-                {isLoading ? "Criando conta..." : "Criar conta"}
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex flex-col gap-2">
-            <div className="text-center text-sm">
-              <Link href="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
-                Já possui uma conta? Fazer login
-              </Link>
+            <div className="space-y-2">
+              <label htmlFor="password" className="block text-sm font-medium">
+                Senha
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
-          </CardFooter>
-        </Card>
-      </main>
+            {errorMessage && <p className="text-red-500 text-sm">{errorMessage}</p>}
+            <Button type="submit" className="w-full bg-indigo-600 text-white hover:bg-indigo-700" disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
 
-      <footer className="border-t py-4 text-center text-sm text-muted-foreground">
-        &copy; {new Date().getFullYear()} NutriDash. Todos os direitos reservados.
-      </footer>
+          <div className="mt-4 text-sm text-center">
+            <a href="/esqueci-senha" className="text-indigo-600 hover:underline">
+              Esqueci minha senha
+            </a>
+          </div>
+
+          <Separator className="my-6" />
+
+          <Button
+            onClick={handleGoogleLogin}
+            variant="outline"
+            className="w-full flex items-center justify-center gap-2"
+            disabled={loading}
+          >
+            <FcGoogle size={20} />
+            Entrar com Google
+          </Button>
+
+          <div className="mt-6 text-sm text-center">
+            Não tem uma conta?{" "}
+            <Link href="/cadastro" className="text-indigo-600 hover:underline">
+              Cadastre-se
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
