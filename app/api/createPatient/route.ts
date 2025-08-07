@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
         telefone,
         uid: userRecord.uid,
         isFirstLogin: true,
+        senhaProvisoria: senhaProvisoria,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
 
