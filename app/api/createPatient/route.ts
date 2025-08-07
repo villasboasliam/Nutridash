@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getFirestoreAdmin, getAuthAdmin, admin } from "@/lib/firebase-admin"
 import nodemailer from "nodemailer"
 
+const senhaProvisoria = crypto.randomBytes(4).toString("hex"); // Ex: "f9a1d3b7"
 export async function POST(req: NextRequest) {
   const db = getFirestoreAdmin()
   const auth = getAuthAdmin()
