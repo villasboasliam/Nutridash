@@ -1,17 +1,14 @@
 "use client"
 
 import { useAuthState } from "react-firebase-hooks/auth"
-import { auth, db } from "@/lib/firebase"
+import { auth } from "@/lib/firebase"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { createUserWithEmailAndPassword } from "firebase/auth"
-import { setDoc, doc, Timestamp } from "firebase/firestore"
 
 export default function NovoPacientePage() {
   const [user, loading] = useAuthState(auth)
@@ -24,56 +21,57 @@ export default function NovoPacientePage() {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!user && !loading) router.push("/login")
-  }, [user, loading])
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  if (!user?.email) {
-    toast({
-      title: "Erro de autenticação",
-      description: "Sua sessão expirou. Faça login novamente.",
-    })
-    return
-  }
+    e.preventDefault()
 
-  setIsLoading(true)
-
-  try {
-    const res = await fetch("/api/createPatient", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        nome,
-        email,
-        telefone,
-        nutricionistaId: user.email,
+    if (!user?.email) {
+      toast({
+        title: "Erro de autenticação",
+        description: "Sua sessão expirou. Faça login novamente.",
+        variant: "destructive",
       })
-    })
+      return
+    }
 
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || "Erro desconhecido")
+    setIsLoading(true)
 
-    toast({
-      title: "Paciente criado!",
-      description: `Paciente ${nome} criado com sucesso. Um e-mail foi enviado.`,
-    })
+    try {
+      const res = await fetch("/api/createPatient", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          email,
+          telefone,
+          nutricionistaId: user.email,
+        }),
+      })
 
-    router.push("/pacientes")
-  } catch (error: any) {
-    console.error("Erro ao criar paciente:", error)
-    toast({
-      title: "Erro ao criar paciente",
-      description: error.message || "Erro desconhecido.",
-      variant: "destructive"
-    })
-  } finally {
-    setIsLoading(false)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao criar paciente.")
+
+      toast({
+        title: "Paciente criado com sucesso!",
+        description: `Um e-mail foi enviado para ${email}.`,
+      })
+
+      router.push("/pacientes")
+    } catch (error: any) {
+      console.error("Erro ao criar paciente:", error)
+      toast({
+        title: "Erro ao criar paciente",
+        description: error.message || "Erro desconhecido.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
-}
-
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -105,3 +103,4 @@ export default function NovoPacientePage() {
     </div>
   )
 }
+
