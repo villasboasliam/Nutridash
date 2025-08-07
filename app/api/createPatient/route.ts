@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       subject: "Acesso ao NutriDash - sua senha provisória",
       html: `
         <h2>Olá, ${nome}!</h2>
-        <p>Você foi cadastrado(a) pela sua nutricionista no NutriDash.</p>
+        <p>Você foi cadastrado(a) por seu nutricionista no NutriDash.</p>
 
         <p><strong>Credenciais de acesso:</strong></p>
         <ul>
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           <li><strong>Senha provisória:</strong> ${senhaProvisoria}</li>
         </ul>
 
-        <p>Você pode trocar sua senha a qualquer momento clicando no botão abaixo:</p>
+        <p>Você pode trocar sua senha a qualquer momento clicando no botão abaixo ou dentro do próprio App:</p>
 
         <p style="margin: 16px 0;">
           <a href="${resetLink}" style="background-color:#6366f1;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;">
