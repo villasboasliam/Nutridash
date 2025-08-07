@@ -100,6 +100,7 @@ export default function PatientDetailPage() {
   const [metricaParaExcluir, setMetricaParaExcluir] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false)
 
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [editInfoOpen, setEditInfoOpen] = useState(false)
   const [editMetricsOpen, setEditMetricsOpen] = useState(false)
   const [isSubmittingDiet, setIsSubmittingDiet] = useState(false);
@@ -1001,39 +1002,58 @@ const handleDeleteMetricEntry = async (metricToDelete: MetricaEntry) => {
 
 
             {/* Informações Pessoais */}
-            <Card className="mb-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Informações Pessoais</CardTitle>
-                </div>
-                <Button
-                  onClick={() => setEditInfoOpen(true)}
-                  className="bg-indigo-600 text-white hover:bg-indigo-700"
-                >
-                  Editar
-                </Button>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Email</p>
-                  <p>{patient?.email}</p>
-                </div>
-               <div>
-  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-  <p>{patient?.telefone ? formatTelefone(patient.telefone) : "-"}</p>
-</div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
-                <p>
-  {patient?.birthdate
-    ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR")
-    : "-"}
-</p>
+           <Card className="mb-6">
+  <CardHeader className="flex flex-row items-center justify-between">
+    <div>
+      <CardTitle>Informações Pessoais</CardTitle>
+    </div>
+    <Button
+      onClick={() => setEditInfoOpen(true)}
+      className="bg-indigo-600 text-white hover:bg-indigo-700"
+    >
+      Editar
+    </Button>
+  </CardHeader>
+  <CardContent className="grid gap-4">
+    <div>
+      <p className="text-sm font-medium text-muted-foreground">Email</p>
+      <p>{patient?.email}</p>
+    </div>
 
-              </div>
-               
-              </CardContent>
-            </Card>
+    <div>
+      <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+      <p>{patient?.telefone ? formatTelefone(patient.telefone) : "-"}</p>
+    </div>
+
+    <div>
+      <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
+      <p>
+        {patient?.birthdate
+          ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR")
+          : "-"}
+      </p>
+    </div>
+
+    {/* ✅ Senha provisória com botão de mostrar/ocultar */}
+    {patient?.senhaProvisoria && (
+      <div>
+        <p className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+          Senha Provisória
+          <button
+            type="button"
+            onClick={() => setMostrarSenha((prev) => !prev)}
+            className="text-indigo-600 text-xs"
+          >
+            {mostrarSenha ? "Ocultar" : "Mostrar"}
+          </button>
+        </p>
+        <p className="font-mono text-sm">
+          {mostrarSenha ? patient.senhaProvisoria : "••••••••"}
+        </p>
+      </div>
+    )}
+  </CardContent>
+</Card>
 
             {/* Modal Editar Informações */}
             <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
