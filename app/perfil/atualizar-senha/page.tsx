@@ -4,9 +4,9 @@ import { useState } from "react"
 import { Eye, EyeOff, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,65 +23,42 @@ export default function UpdatePasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const { data: session } = useSession()
+  const [user] = useAuthState(auth)
   const router = useRouter()
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (!user?.email) {
+      toast({ title: "Erro", description: "Usuário não autenticado." })
+      return
+    }
+
     if (newPassword.length < 6) {
-      toast({
-        title: "Senha muito curta",
-        description: "A nova senha deve ter pelo menos 6 caracteres.",
-        variant: "destructive",
-      })
+      toast({ title: "Senha muito curta", description: "A nova senha deve ter pelo menos 6 caracteres.", variant: "destructive" })
       return
     }
 
     if (newPassword !== confirmPassword) {
-      toast({
-        title: "Senhas não coincidem",
-        description: "A nova senha e a confirmação estão diferentes.",
-        variant: "destructive",
-      })
+      toast({ title: "Senhas não coincidem", description: "A nova senha e a confirmação estão diferentes.", variant: "destructive" })
       return
     }
-
-    if (!session?.user?.email) return
 
     setIsLoading(true)
 
     try {
-      const ref = doc(db, "nutricionistas", session.user.email)
-      const snap = await getDoc(ref)
+      const credential = EmailAuthProvider.credential(user.email, currentPassword)
+      await reauthenticateWithCredential(user, credential)
 
-      if (!snap.exists()) throw new Error("Usuário não encontrado no banco de dados.")
+      await updatePassword(user, newPassword)
 
-      const dados = snap.data()
-
-      if (dados.senha !== currentPassword) {
-        toast({
-          title: "Senha atual incorreta",
-          description: "A senha atual digitada não confere com nosso registro.",
-          variant: "destructive",
-        })
-        setIsLoading(false)
-        return
-      }
-
-      await updateDoc(ref, { senha: newPassword })
-
-      toast({
-        title: "Senha atualizada com sucesso!",
-        description: "Sua nova senha foi salva com segurança.",
-      })
-
+      toast({ title: "Senha atualizada com sucesso!", description: "Sua nova senha foi salva com segurança." })
       router.push("/perfil")
-    } catch (err: any) {
+    } catch (error: any) {
       toast({
         title: "Erro ao atualizar senha",
-        description: err.message || "Tente novamente mais tarde.",
+        description: error.message || "Verifique a senha atual e tente novamente.",
         variant: "destructive",
       })
     } finally {
@@ -112,6 +89,7 @@ export default function UpdatePasswordPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Senha atual */}
                 <div className="space-y-2">
                   <Label htmlFor="current-password">Senha atual</Label>
                   <div className="relative">
@@ -132,6 +110,7 @@ export default function UpdatePasswordPage() {
                   </div>
                 </div>
 
+                {/* Nova senha */}
                 <div className="space-y-2">
                   <Label htmlFor="new-password">Nova senha</Label>
                   <div className="relative">
@@ -152,6 +131,7 @@ export default function UpdatePasswordPage() {
                   </div>
                 </div>
 
+                {/* Confirmar senha */}
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirmar nova senha</Label>
                   <div className="relative">
