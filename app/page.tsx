@@ -1,7 +1,8 @@
 "use client"
 
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase"
 import { useEffect, useState } from "react"
-import { useSession } from "next-auth/react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { collection, getDocs, getDoc, doc, query, where } from "firebase/firestore"
@@ -33,35 +34,31 @@ interface ConsultaMes {
 }
 
 export default function DashboardWrapper() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const [user, loading] = useAuthState(auth);
+  const router = useRouter();
 
-  console.log("🚀 useSession:", { status, session })
+  console.log("🚀 Firebase Auth:", { loading, user });
 
   useEffect(() => {
-    if (status === "loading") return // 🔥 só tenta redirecionar quando loading terminar
-    if (status === "unauthenticated") {
-      console.log("⚠ Redirecionando pois status é unauthenticated")
-      router.push("/login")
+    if (loading) return; // Espera o carregamento da autenticação
+    if (!user) {
+      console.log("⚠ Redirecionando pois usuário não está autenticado");
+      router.push("/login");
     }
-  }, [status, router])
+  }, [loading, user, router]);
 
-  if (status !== "authenticated") {
-    console.log("⏳ Ainda não autenticado, status:", status)
-    return <div className="p-6 text-center">Carregando sessão...</div>
+  if (loading || !user) {
+    console.log("⏳ Ainda não autenticado, aguardando...");
+    return <div className="p-6 text-center">Carregando sessão...</div>;
   }
 
-  console.log("✅ Sessão autenticada, renderizando Dashboard")
-  return <Dashboard session={session} />
+  console.log("✅ Usuário autenticado, renderizando Dashboard");
+  return <Dashboard user={user} />;
 }
 
-
-
-
-
-function Dashboard({ session }: { session: any }) {
-  const pathname = usePathname()
-  const { t } = useLanguage()
+function Dashboard({ user }: { user: any }) {
+  const pathname = usePathname();
+  const { t } = useLanguage();
   const [metrics, setMetrics] = useState({
     totalPacientes: 0,
     pacientesAtivos: 0,
@@ -70,13 +67,14 @@ function Dashboard({ session }: { session: any }) {
     dietasSemanaAnterior: 0,
     taxaAcesso: 0,
     acessosPorDia: [] as AcessoDia[],
-  })
-  const [consultasUltimos6Meses, setConsultasUltimos6Meses] = useState<ConsultaMes[]>([])
+  });
+  const [consultasUltimos6Meses, setConsultasUltimos6Meses] = useState<ConsultaMes[]>([]);
 
   useEffect(() => {
     const fetchMetrics = async () => {
-      if (!session?.user?.email) return;
-      const nutricionistaEmail = session.user.email;
+      if (!user?.email) return;  // <--- Aqui estava invertido
+
+      const nutricionistaEmail = user.email;
       const pacientesSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes"));
       const pacientes: Paciente[] = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -121,7 +119,7 @@ function Dashboard({ session }: { session: any }) {
         const date = new Date(dia);
         date.setTime(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
         return {
-          dia: date.toLocaleDateString('pt-BR', { weekday: 'short' }),
+          dia: date.toLocaleDateString("pt-BR", { weekday: "short" }),
           acessos: acessosPorDiaMap[dia] || 0,
         };
       });
@@ -140,31 +138,41 @@ function Dashboard({ session }: { session: any }) {
       const consultasRef = collection(db, "nutricionistas", nutricionistaEmail, "consultas");
       const seisMesesAtras = new Date();
       seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
-      const seisMesesAtrasString = `${seisMesesAtras.getFullYear()}-${(seisMesesAtras.getMonth() + 1).toString().padStart(2, '0')}-${seisMesesAtras.getDate().toString().padStart(2, '0')}`;
+      const seisMesesAtrasString = `${seisMesesAtras.getFullYear()}-${(seisMesesAtras.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${seisMesesAtras.getDate().toString().padStart(2, "0")}`;
       const q = query(consultasRef, where("data", ">=", seisMesesAtrasString));
       const consultasSnap = await getDocs(q);
       const consultas = consultasSnap.docs.map(doc => doc.data());
       const consultasPorMes: { [key: string]: number } = {};
       consultas.forEach(consulta => {
         const dataConsulta = consulta.data;
-        if (typeof dataConsulta === 'string' && dataConsulta.includes('-')) {
-          const [ano, mes] = dataConsulta.split('-');
+        if (typeof dataConsulta === "string" && dataConsulta.includes("-")) {
+          const [ano, mes] = dataConsulta.split("-");
           const chave = `${ano}-${mes}`;
           consultasPorMes[chave] = (consultasPorMes[chave] || 0) + 1;
         }
       });
+
       const dataGraficoConsultas = Object.keys(consultasPorMes)
         .sort()
         .map(chave => {
-          const [ano, mes] = chave.split('-');
-          const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString('pt-BR', { month: 'short' });
+          const [ano, mes] = chave.split("-");
+          const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", {
+            month: "short",
+          });
           return { mes: nomeMes, consultas: consultasPorMes[chave] };
         });
       setConsultasUltimos6Meses(dataGraficoConsultas.slice(-6));
     };
 
     fetchMetrics();
-  }, [session])
+  }, [user]);
+
+
+
+
+
 
   const calcVariation = (current: number, previous: number) => {
     if (previous === 0) return "+100%"
@@ -280,7 +288,7 @@ function Dashboard({ session }: { session: any }) {
             <XAxis dataKey="mes" />
             <YAxis />
             <Tooltip />
-            <Bar dataKey="consultas" fill="#10B981" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="consultas" fill="#6366F1" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

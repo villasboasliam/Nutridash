@@ -1,61 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { signIn } from "next-auth/react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { FcGoogle } from "react-icons/fc"
-import { toast } from "@/components/ui/use-toast"
-import Link from "next/link"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { toast } from "@/components/ui/use-toast";
+import Link from "next/link";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { FcGoogle } from "react-icons/fc"; // Ícone do Google
 
 export default function LoginPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    const error = searchParams.get("error")
-    if (error === "CredentialsSignin") {
-      setErrorMessage("Senha incorreta")
-    } else {
-      setErrorMessage(null)
-    }
-  }, [searchParams])
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setErrorMessage(null)
+    e.preventDefault();
+    setLoading(true);
+    setErrorMessage(null);
 
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-      callbackUrl: "/pacientes",
-    })
-
-    setLoading(false)
-
-    if (res?.error) {
-      setErrorMessage("Senha incorreta")
-    } else {
-      toast({
-        title: "Login realizado",
-        description: "Redirecionando...",
-      })
-      router.push("/pacientes")
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: "Login realizado", description: "Redirecionando..." });
+      router.push("/pacientes");
+    } catch (error: any) {
+      console.error("Erro de login:", error);
+      setErrorMessage("E-mail ou senha incorretos");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   const handleGoogleLogin = async () => {
-    await signIn("google", { callbackUrl: "/pacientes" })
-  }
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      toast({ title: "Login com Google realizado", description: "Redirecionando..." });
+      router.push("/pacientes");
+    } catch (error: any) {
+      console.error("Erro no login com Google:", error);
+      toast({ title: "Erro no login com Google", description: "Tente novamente." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -104,17 +100,18 @@ export default function LoginPage() {
           </div>
 
           <Separator className="my-6" />
-          {/*
+
           <Button
+            onClick={handleGoogleLogin}
             variant="outline"
             className="w-full flex items-center justify-center gap-2"
-            onClick={handleGoogleLogin}
+            disabled={loading}
           >
-            <FcGoogle className="h-5 w-5" />
+            <FcGoogle size={20} />
             Entrar com Google
           </Button>
-            */}
-          <div className="mt-4 text-sm text-center">
+
+          <div className="mt-6 text-sm text-center">
             Não tem uma conta?{" "}
             <Link href="/cadastro" className="text-indigo-600 hover:underline">
               Cadastre-se
@@ -123,5 +120,5 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

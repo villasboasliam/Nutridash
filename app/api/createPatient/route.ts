@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       .collection("nutricionistas")
       .doc(nutricionistaId)
       .collection("pacientes")
-      .doc(userRecord.uid)
+      .doc(email)
       .set({
         nome,
         email,

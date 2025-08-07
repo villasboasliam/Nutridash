@@ -1,9 +1,9 @@
-// src/lib/firebase.ts
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // Importe getAuth
-import { getStorage } from "firebase/storage"; // Importe getStorage
+import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
+// ✅ Certifique-se de que TODAS essas variáveis estão no .env.local
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -14,11 +14,16 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Inicializa o Firebase apenas uma vez
+// ✅ Inicializa o app só se ainda não estiver criado
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
+// ✅ Inicializa os serviços
 const db = getFirestore(app);
-const auth = getAuth(app); // Inicializa o Auth
-const storage = getStorage(app); // Inicializa o Storage
+const auth = getAuth(app);
+const storage = getStorage(app);
 
-export { db, auth, storage, app }; // Exporte 'auth' e 'storage'
+// ✅ Teste temporário de depuração (remover depois)
+console.log("📦 Firebase App Name:", app.name); // Deve mostrar "[DEFAULT]"
+console.log("🔥 Firestore instance:", db); // Deve ser um objeto
+
+export { db, auth, storage, app };

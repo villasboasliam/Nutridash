@@ -1,9 +1,11 @@
 [
   {
-    "origin": ["http://localhost:3000"], 
-    "responseHeader": ["Content-Type", "Authorization"],  
-    "method": ["GET", "POST", "PUT", "DELETE"],  
-    "maxAgeSeconds": 3600  
+    "origin": [
+      "http://localhost:3000",
+      "https://nutridash-phi.vercel.app"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
   }
 ]
-

@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { useState, useEffect } from "react"
 import { FileText, Home, LineChart, Menu, Search, Users } from "lucide-react"
@@ -11,9 +11,9 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
-import { db } from "@/lib/firebase"
+import { db, auth } from "@/lib/firebase"
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from "firebase/firestore"
-import { useSession } from "next-auth/react"
+import { useAuthState } from "react-firebase-hooks/auth"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -21,26 +21,24 @@ export default function PatientsPage() {
   const router = useRouter()
   const { t } = useLanguage()
   const [patients, setPatients] = useState<any[]>([])
-  const [nutricionistaId, setNutricionistaId] = useState("")
   const [plano, setPlano] = useState("teste")
-  const { data: session, status } = useSession()
+  const [user, loading] = useAuthState(auth)
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/api/auth/signin")
+    if (!loading && !user) {
+      router.push("/login")
     }
-  }, [status, router])
+  }, [loading, user, router])
 
   useEffect(() => {
     const verificarCadastro = async () => {
-      if (!session?.user?.email) return
-      const ref = doc(db, "nutricionistas", session.user.email)
+      if (!user?.email) return
+      const ref = doc(db, "nutricionistas", user.email)
       const snap = await getDoc(ref)
-
       if (!snap.exists()) {
         await setDoc(ref, {
-          nome: session.user.name || "",
-          email: session.user.email,
+          nome: user.displayName || "",
+          email: user.email,
           plano: "gratuito",
           assinatura_ativa: false,
           data_criacao: new Date()
@@ -48,46 +46,64 @@ export default function PatientsPage() {
       }
     }
     verificarCadastro()
-  }, [session])
+  }, [user])
 
   useEffect(() => {
-    const fetchNutriInfo = async () => {
-      if (!session?.user?.email) return
-      const ref = collection(db, "nutricionistas")
-      const q = query(ref, where("email", "==", session.user.email))
-      const snap = await getDocs(q)
-      if (!snap.empty) {
-        const doc = snap.docs[0]
-        setNutricionistaId(doc.id)
-        setPlano(doc.data().plano || "teste")
+    const fetchPlano = async () => {
+      if (!user?.email) return
+      const ref = doc(db, "nutricionistas", user.email)
+      const snap = await getDoc(ref)
+      if (snap.exists()) {
+        setPlano(snap.data().plano || "teste")
       }
     }
-    fetchNutriInfo()
-  }, [session])
+    fetchPlano()
+  }, [user])
 
-  useEffect(() => {
-    const fetchPacientes = async () => {
-      if (!nutricionistaId) return
-      const ref = collection(db, "nutricionistas", nutricionistaId, "pacientes")
-      const snapshot = await getDocs(ref)
-      const lista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      setPatients(lista)
+useEffect(() => {
+  const fetchPacientes = async () => {
+    if (!user || !user.email) {
+      console.warn("⚠️ Usuário não autenticado ou email ausente.");
+      return;
     }
-    fetchPacientes()
-  }, [nutricionistaId])
+
+    try {
+      const ref = collection(db, "nutricionistas", user.email, "pacientes");
+      console.log("🔍 Buscando em:", `nutricionistas/${user.email}/pacientes`);
+      const snapshot = await getDocs(ref);
+
+      if (snapshot.empty) {
+        console.warn("📭 Nenhum paciente encontrado.");
+      }
+
+      const lista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      console.log("👥 Pacientes:", lista);
+      setPatients(lista);
+    } catch (err) {
+      console.error("❌ Erro ao buscar pacientes:", err);
+    }
+  };
+
+  // Só chama quando loading acabar e user existir
+  if (!loading && user) {
+    fetchPacientes();
+  }
+}, [user, loading]);
+
+
+
 
   const filteredPatients = patients.filter(
     (patient) =>
-      patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      patient.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.phone?.includes(searchTerm),
+      patient.telefone?.includes(searchTerm)
   )
 
-  const exibirAvisoUpgrade = plano === "teste" && patients.length >= 5;
+  const exibirAvisoUpgrade = plano === "teste" && patients.length >= 5
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar fixado para desktop */}
       <aside className="hidden w-64 flex-col bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-r border-[hsl(var(--sidebar-border))] lg:flex fixed h-full">
         <div className="flex h-14 items-center border-b px-4">
           <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
@@ -158,15 +174,14 @@ export default function PatientsPage() {
                     <Link href="/">Voltar ao Dashboard</Link>
                   </Button>
                   {plano === "teste" && patients.length >= 5 ? (
-  <Button disabled className="bg-gray-300 text-gray-600 cursor-not-allowed">
-    + Novo Paciente
-  </Button>
-) : (
-  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
-    <Link href="/pacientes/novo">+ Novo Paciente</Link>
-  </Button>
-)}
-
+                    <Button disabled className="bg-gray-300 text-gray-600 cursor-not-allowed">
+                      + Novo Paciente
+                    </Button>
+                  ) : (
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                      <Link href="/pacientes/novo">+ Novo Paciente</Link>
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -179,7 +194,7 @@ export default function PatientsPage() {
 
                 {['todos', 'ativos', 'inativos'].map((label) => {
                   const filtro =
-                    label === 'ativos' ? (p: any) => p.status === 'Ativo' :
+                    label === 'ativos' ? (p: any) => (p.status || "Ativo") === 'Ativo' :
                     label === 'inativos' ? (p: any) => p.status === 'Inativo' :
                     () => true
                   const titulo =
@@ -198,7 +213,6 @@ export default function PatientsPage() {
                             {filteredPatients.filter(filtro).length > 0 ? (
                               filteredPatients.filter(filtro).map((patient) => (
                                 <Link key={patient.email} href={`/pacientes/${encodeURIComponent(patient.email)}`}>
-
                                   <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted transition-colors">
                                     <div className="flex items-center gap-4">
                                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
@@ -212,15 +226,15 @@ export default function PatientsPage() {
                                     <div className="flex items-center gap-4">
                                       <div className="hidden md:block">
                                         <p className="text-sm text-right">{t("last.visit")}</p>
-                                        <p className="text-sm font-medium text-right">{patient.lastVisit}</p>
+                                        <p className="text-sm font-medium text-right">{patient.lastVisit || "-"}</p>
                                       </div>
                                       <div>
                                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                          patient.status === "Ativo"
+                                          (patient.status || "Ativo") === "Ativo"
                                             ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
                                             : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
                                           }`}>
-                                          {patient.status}
+                                          {patient.status || "Ativo"}
                                         </span>
                                       </div>
                                     </div>

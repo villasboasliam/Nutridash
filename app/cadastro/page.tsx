@@ -1,69 +1,64 @@
-"use client"
+"use client";
 
-
-import { useState } from "react"
-import { Eye, EyeOff, LineChart } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { doc, setDoc, serverTimestamp } from "firebase/firestore" // Importações do Firebase Client SDK
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { db } from "@/lib/firebase" // <--- CORRIGIDO: Importando 'db' do Firebase Client SDK
-import { useToast } from "@/components/ui/use-toast" // Importe useToast
+import { useState } from "react";
+import { Eye, EyeOff, LineChart } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { useToast } from "@/components/ui/use-toast";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase"; // Certifique-se que isso está correto
 
 export default function CadastroPage() {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
-  const { toast } = useToast() // Inicialize useToast
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    // AVISO: Armazenar senha em texto plano no Firestore NÃO É SEGURO.
-    // Em uma aplicação real, você deve usar Firebase Authentication para criar o usuário
-    // e gerenciar senhas de forma segura, ou hash de senhas no backend.
-    // Este código é apenas para fins de demonstração do problema de importação.
-    console.warn("AVISO: Senha sendo armazenada em texto plano. Considere usar Firebase Authentication para gerenciar usuários e senhas de forma segura.")
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
-      // 'db' aqui é a instância do Firestore do Firebase Client SDK
-      const ref = doc(db, "nutricionistas", email)
-      await setDoc(ref, {
-        nome: name,
-        email: email,
-        senha: password, // Repetindo o aviso: NÃO SEGURO para produção!
-        assinatura_ativa: false,
-        plano: "teste",
-        data_criacao: serverTimestamp(),
-      })
+      // 🔐 Cria usuário no Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
 
-      setIsLoading(false)
+      // 🗂️ Salva dados no Firestore com ID = UID
+      await setDoc(doc(db, "nutricionistas", uid), {
+        nome: name,
+        email,
+        plano: "teste",
+        assinatura_ativa: false,
+        data_criacao: serverTimestamp(),
+      });
+
       toast({
         title: "Cadastro realizado!",
-        description: "Sua conta de nutricionista foi criada com sucesso. Faça login.",
-        variant: "default",
-      })
-      router.push("/login")
-    } catch (error) {
-      console.error("Erro ao cadastrar nutricionista:", error)
-      setIsLoading(false)
+        description: "Sua conta foi criada com sucesso. Faça login.",
+      });
+
+      router.push("/login");
+    } catch (error: any) {
+      console.error("Erro ao cadastrar:", error);
       toast({
         title: "Erro no cadastro",
-        description: "Ocorreu um erro ao tentar cadastrar. Tente novamente.",
+        description: error.message || "Tente novamente.",
         variant: "destructive",
-      })
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -128,5 +123,5 @@ export default function CadastroPage() {
         &copy; {new Date().getFullYear()} NutriDash. Todos os direitos reservados.
       </footer>
     </div>
-  )
+  );
 }
