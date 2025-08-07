@@ -578,8 +578,6 @@ const handleSendMaterial = async () => {
 };
 
 
-    if (status === "loading") return null; // Ou exiba um spinner de carregamento
-
     return (
         <div className="flex min-h-screen bg-background">
             {/* Sidebar para desktop */}
