@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     // 🔐 Criação do usuário no Firebase Auth
     const userRecord = await auth.createUser({
       email: cleanEmail,
-      password: crypto.randomBytes(16).toString("base64url"), // apenas exigência do Firebase
+      password: senhaProvisoria, // apenas exigência do Firebase
     })
     console.log("✅ Usuário criado:", userRecord.uid)
 
