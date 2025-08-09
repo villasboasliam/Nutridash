@@ -4,6 +4,8 @@ import { Providers } from "@/app/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
+export const viewport = { width: "device-width", initialScale: 1 };
+
 export const metadata = {
   title: "NutriDash",
   description: "Dashboard para nutricionistas",
