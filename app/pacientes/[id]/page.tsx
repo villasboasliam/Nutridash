@@ -142,6 +142,19 @@ const id = rawId ? decodeURIComponent(rawId) : ""
   const [gorduraPercentualNovoInput, setGorduraPercentualNovoInput] = useState("")
   const [somatorioDobrasNovo, setSomatorioDobrasNovo] = useState("")
   const [densidadeCorporalNovoInput, setDensidadeCorporalNovoInput] = useState("")
+  // ---- Dobras cutâneas (protocolo + pontos) ----
+const [protocoloDobras, setProtocoloDobras] = useState<"pollock3" | "pollock7">("pollock3")
+const [sexoAvaliacao, setSexoAvaliacao] = useState<string>(patient?.sexo ?? "feminino")
+
+// Entradas de dobras (mm)
+const [dobraPeitoral, setDobraPeitoral] = useState("")
+const [dobraAbdominal, setDobraAbdominal] = useState("")
+const [dobraCoxa, setDobraCoxa] = useState("")
+const [dobraTricipital, setDobraTricipital] = useState("")
+const [dobraSupraIliaca, setDobraSupraIliaca] = useState("")
+const [dobraAxilarMedia, setDobraAxilarMedia] = useState("")
+const [dobraSubescapular, setDobraSubescapular] = useState("")
+
   // Calculados
   const [imcNovo, setImcNovo] = useState("")
   const [classificacaoImcNovo, setClassificacaoImcNovo] = useState("")
@@ -172,18 +185,19 @@ const id = rawId ? decodeURIComponent(rawId) : ""
     cintura: 0,
   })
 
-  useEffect(() => {
-    if (patient) {
-      setEditData({
-        name: patient.nome || "",
-        email: patient.email || "",
-        telefone: patient.telefone || "",
-        birthdate: patient.birthdate || "",
-        valorConsulta: patient.valorConsulta || "",
-      })
-      setIsActive((patient.status || "Ativo") === "Ativo")
-    }
-  }, [patient])
+useEffect(() => {
+  if (!patient) return
+  setEditData({
+    name: patient.nome || "",
+    email: patient.email || "",
+    telefone: patient.telefone || "",
+    birthdate: patient.birthdate || "",
+    valorConsulta: patient.valorConsulta || "",
+  })
+  setIsActive((patient.status || "Ativo") === "Ativo")
+  if (patient.sexo) setSexoAvaliacao(patient.sexo)  // <- seta o sexo para cálculos
+}, [patient])
+
 
   // ===== Utils (corrigidos) =====
   const parseNumber = (value: string) => {
@@ -258,6 +272,105 @@ const id = rawId ? decodeURIComponent(rawId) : ""
     if (peso === 0) return 0
     return peso * 0.207
   }, [])
+// Idade a partir do birthdate (YYYY-MM-DD)
+const getIdade = () => {
+  if (!patient?.birthdate) return 30 // fallback se não tiver data
+  const hoje = new Date()
+  const nasc = new Date(patient.birthdate + "T12:00:00")
+  let idade = hoje.getFullYear() - nasc.getFullYear()
+  const m = hoje.getMonth() - nasc.getMonth()
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--
+  return Math.max(0, idade)
+}
+
+// Siri: %G = 495/D - 450
+const siriPercentFat = (densidade: number) => (densidade ? 495 / densidade - 450 : 0)
+
+// Jackson & Pollock – 3 dobras (homem: peitoral+abdominal+coxa / mulher: tricipital+supra-ilíaca+coxa)
+const densidadePollock3 = (sum: number, idade: number, sexo: string) => {
+  const fem = (sexo || "").toLowerCase().startsWith("f")
+  if (fem) {
+    return 1.0994921 - 0.0009929 * sum + 0.0000023 * sum * sum - 0.0001392 * idade
+  }
+  return 1.10938 - 0.0008267 * sum + 0.0000016 * sum * sum - 0.0002574 * idade
+}
+
+// Jackson & Pollock – 7 dobras (peitoral + axilar média + tricipital + subescapular + abdominal + supra-ilíaca + coxa)
+const densidadePollock7 = (sum: number, idade: number, sexo: string) => {
+  const fem = (sexo || "").toLowerCase().startsWith("f")
+  if (fem) {
+    return 1.097 - 0.00046971 * sum + 0.00000056 * sum * sum - 0.00012828 * idade
+  }
+  return 1.112 - 0.00043499 * sum + 0.00000055 * sum * sum - 0.00028826 * idade
+}
+
+// Recalcular a partir das dobras selecionadas
+const recalcFromSkinfolds = useCallback(() => {
+  const n = (v: string) => (v.trim() === "" ? 0 : Number(v.replace(",", ".")))
+
+  let soma = 0
+  if (protocoloDobras === "pollock3") {
+    const fem = (sexoAvaliacao || "").toLowerCase().startsWith("f")
+    // homem: peitoral + abdominal + coxa
+    // mulher: tricipital + supra-ilíaca + coxa
+    soma = fem
+      ? n(dobraTricipital) + n(dobraSupraIliaca) + n(dobraCoxa)
+      : n(dobraPeitoral) + n(dobraAbdominal) + n(dobraCoxa)
+  } else {
+    // pollock7 (peitoral + axilar média + tricipital + subescapular + abdominal + supra-ilíaca + coxa)
+    soma =
+      n(dobraPeitoral) +
+      n(dobraAxilarMedia) +
+      n(dobraTricipital) +
+      n(dobraSubescapular) +
+      n(dobraAbdominal) +
+      n(dobraSupraIliaca) +
+      n(dobraCoxa)
+  }
+
+  const idade = getIdade()
+  const dens =
+    protocoloDobras === "pollock3"
+      ? densidadePollock3(soma, idade, sexoAvaliacao)
+      : densidadePollock7(soma, idade, sexoAvaliacao)
+
+  const perc = siriPercentFat(dens)
+
+  // atualiza campos visuais (com vírgula para pt-BR)
+  setSomatorioDobrasNovo(soma ? soma.toFixed(0) : "")
+  setDensidadeCorporalNovoInput(dens ? dens.toFixed(3).replace(".", ",") : "")
+  setGorduraPercentualNovoInput(perc ? perc.toFixed(1).replace(".", ",") : "")
+
+  // propaga massas
+  const peso = parseNumber(pesoNovo)
+  const mg = (perc / 100) * (peso || 0)
+  setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+  const mlg = peso ? peso - mg : 0
+  setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+  const mr = calculateMassaResidual(peso)
+  setMassaResidualNovo(mr ? mr.toFixed(2).replace(".", ",") : "")
+  const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+  setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+  setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+}, [
+  protocoloDobras,
+  sexoAvaliacao,
+  dobraPeitoral,
+  dobraAbdominal,
+  dobraCoxa,
+  dobraTricipital,
+  dobraSupraIliaca,
+  dobraAxilarMedia,
+  dobraSubescapular,
+  pesoNovo,
+  parseNumber,
+  calculateMassaResidual,
+])
+
+// Quando qualquer dobra/protocolo/sexo mudar, recalcula
+useEffect(() => {
+  recalcFromSkinfolds()
+}, [recalcFromSkinfolds])
 
   // ===== Upload helpers (paths corrigidos com template string) =====
   const uploadPhoto = async (file: File, patientId: string, imageName: string) => {
@@ -1539,23 +1652,164 @@ const isClient = typeof window !== "undefined"
                           />
                         </div>
 
-                        <div className="grid gap-2">
-                          <Label>Somatório de Dobras (mm)</Label>
-                          <Input
-                            value={somatorioDobrasNovo}
-                            onChange={(e) => setSomatorioDobrasNovo(e.target.value)}
-                            placeholder="120"
-                          />
-                        </div>
+                       {/* ====== Protocolo de dobras ====== */}
+<div className="grid gap-2 md:col-span-2 lg:col-span-3 border rounded-lg p-3">
+  <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-1">
+      <Label>Protocolo</Label>
+      <select
+        className="border rounded p-2 bg-background"
+        value={protocoloDobras}
+        onChange={(e) => setProtocoloDobras(e.target.value as "pollock3" | "pollock7")}
+      >
+        <option value="pollock3">Jackson & Pollock (3 dobras)</option>
+        <option value="pollock7">Jackson & Pollock (7 dobras)</option>
+      </select>
+    </div>
 
-                        <div className="grid gap-2">
-                          <Label>Densidade Corporal (g/mL)</Label>
-                          <Input
-                            value={densidadeCorporalNovoInput}
-                            onChange={(e) => setDensidadeCorporalNovoInput(e.target.value)}
-                            placeholder="1,070"
-                          />
-                        </div>
+    <div className="grid gap-1">
+      <Label>Sexo para cálculo</Label>
+      <select
+        className="border rounded p-2 bg-background"
+        value={sexoAvaliacao}
+        onChange={(e) => setSexoAvaliacao(e.target.value)}
+      >
+        <option value="feminino">Feminino</option>
+        <option value="masculino">Masculino</option>
+      </select>
+      <p className="text-xs text-muted-foreground">Usa fórmulas específicas por sexo.</p>
+    </div>
+
+    <div className="grid gap-1">
+      <Label>Somatório de Dobras (mm)</Label>
+      <Input value={somatorioDobrasNovo} disabled placeholder="Calculado" />
+    </div>
+  </div>
+
+  {/* Campos por dobra */}
+  <div className="grid gap-3 mt-3 md:grid-cols-3">
+    {/* Comuns: Coxa sempre aparece */}
+    <div className="grid gap-1">
+      <Label>Coxa (mm)</Label>
+      <Input
+        value={dobraCoxa}
+        onChange={(e) => setDobraCoxa(e.target.value)}
+        placeholder="ex: 18"
+      />
+    </div>
+
+    {/* Pollock 3 – masculino: Peitoral, Abdominal */}
+    {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("m") && (
+      <>
+        <div className="grid gap-1">
+          <Label>Peitoral (mm)</Label>
+          <Input
+            value={dobraPeitoral}
+            onChange={(e) => setDobraPeitoral(e.target.value)}
+            placeholder="ex: 10"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Abdominal (mm)</Label>
+          <Input
+            value={dobraAbdominal}
+            onChange={(e) => setDobraAbdominal(e.target.value)}
+            placeholder="ex: 20"
+          />
+        </div>
+      </>
+    )}
+
+    {/* Pollock 3 – feminino: Tricipital, Supra-ilíaca */}
+    {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("f") && (
+      <>
+        <div className="grid gap-1">
+          <Label>Tricipital (mm)</Label>
+          <Input
+            value={dobraTricipital}
+            onChange={(e) => setDobraTricipital(e.target.value)}
+            placeholder="ex: 18"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Supra-ilíaca (mm)</Label>
+          <Input
+            value={dobraSupraIliaca}
+            onChange={(e) => setDobraSupraIliaca(e.target.value)}
+            placeholder="ex: 16"
+          />
+        </div>
+      </>
+    )}
+
+    {/* Pollock 7 – mostra todos os 7 pontos */}
+    {protocoloDobras === "pollock7" && (
+      <>
+        <div className="grid gap-1">
+          <Label>Peitoral (mm)</Label>
+          <Input
+            value={dobraPeitoral}
+            onChange={(e) => setDobraPeitoral(e.target.value)}
+            placeholder="ex: 10"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Axilar média (mm)</Label>
+          <Input
+            value={dobraAxilarMedia}
+            onChange={(e) => setDobraAxilarMedia(e.target.value)}
+            placeholder="ex: 12"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Tricipital (mm)</Label>
+          <Input
+            value={dobraTricipital}
+            onChange={(e) => setDobraTricipital(e.target.value)}
+            placeholder="ex: 18"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Subescapular (mm)</Label>
+          <Input
+            value={dobraSubescapular}
+            onChange={(e) => setDobraSubescapular(e.target.value)}
+            placeholder="ex: 14"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Abdominal (mm)</Label>
+          <Input
+            value={dobraAbdominal}
+            onChange={(e) => setDobraAbdominal(e.target.value)}
+            placeholder="ex: 20"
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Supra-ilíaca (mm)</Label>
+          <Input
+            value={dobraSupraIliaca}
+            onChange={(e) => setDobraSupraIliaca(e.target.value)}
+            placeholder="ex: 16"
+          />
+        </div>
+      </>
+    )}
+  </div>
+
+  {/* Saídas calculadas */}
+  <div className="grid gap-3 mt-3 md:grid-cols-3">
+    <div className="grid gap-1">
+      <Label>Densidade Corporal (g/mL)</Label>
+      <Input value={densidadeCorporalNovoInput} disabled placeholder="Calculado" />
+    </div>
+    <div className="grid gap-1">
+      <Label>% Gordura (Siri)</Label>
+      <Input value={gorduraPercentualNovoInput} disabled placeholder="Calculado" />
+    </div>
+  </div>
+</div>
+
 
                         {/* Calculados (desabilitados) */}
                         <div className="grid gap-2">
