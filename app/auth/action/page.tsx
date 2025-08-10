@@ -12,7 +12,9 @@ export default function EmailActionPage() {
   const router = useRouter();
   const mode = params.get("mode");
   const oobCode = params.get("oobCode");
-  const continueUrl = params.get("continueUrl") || "/login?verified=1";
+
+  // Sempre redireciona para uma rota local segura
+  const SAFE_REDIRECT = "/login?verified=1";
 
   const [status, setStatus] = useState<"loading" | "ok" | "expired" | "invalid">("loading");
 
@@ -23,15 +25,21 @@ export default function EmailActionPage() {
         return;
       }
       try {
-        await applyActionCode(auth, oobCode);   // conclui verificação
+        // Conclui a verificação com o código da URL
+        await applyActionCode(auth, oobCode);
         await auth.currentUser?.reload?.();
+
         setStatus("ok");
-        setTimeout(() => router.replace(continueUrl), 800);
+
+        // Redireciona SEM usar qualquer continueUrl da query (evita erro do Google)
+        setTimeout(() => router.replace(SAFE_REDIRECT), 600);
       } catch (e: any) {
-        setStatus(e?.code === "auth/expired-action-code" ? "expired" : "invalid");
+        const code = e?.code || "";
+        if (code === "auth/expired-action-code") setStatus("expired");
+        else setStatus("invalid");
       }
     })();
-  }, [mode, oobCode, continueUrl, router]);
+  }, [mode, oobCode, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
@@ -50,6 +58,7 @@ export default function EmailActionPage() {
             {status === "invalid" && "Não foi possível validar este link."}
           </CardDescription>
         </CardHeader>
+
         {(status === "expired" || status === "invalid") && (
           <CardContent className="flex gap-2">
             <Button onClick={() => router.push("/verificar-email")}>Reenviar</Button>
