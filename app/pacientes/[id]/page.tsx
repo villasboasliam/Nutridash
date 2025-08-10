@@ -1525,426 +1525,363 @@ const isClient = typeof window !== "undefined"
                     <CardTitle>Nova Medição</CardTitle>
                     <CardDescription>Preencha os campos. Os cálculos aparecem automaticamente.</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col gap-4 max-w-xl mx-auto">
-                      <div className="grid gap-2">
-                        <Label>Data da Medição</Label>
-                        <Input
-                          type="date"
-                          value={dataNovaMetrica}
-                          onChange={(e) => setDataNovaMetrica(e.target.value)}
-                        />
-                      </div>
+                  
+                 <CardContent>
+  <div className="grid gap-6 lg:grid-cols-3">
+    {/* ======= Coluna 1: MÉTRICAS ======= */}
+    <section className="space-y-4">
+      <div className="grid gap-2">
+        <Label>Data da Medição</Label>
+        <Input
+          type="date"
+          value={dataNovaMetrica}
+          onChange={(e) => setDataNovaMetrica(e.target.value)}
+        />
+      </div>
 
-                      {/* Entradas base */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="grid gap-2">
-                          <Label>Peso (kg)</Label>
-                          <Input
-                            value={pesoNovo}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setPesoNovo(v)
-                              // recalc
-                              const peso = parseNumber(v)
-                              const altura = parseNumber(alturaNova)
-                              const imc = calculateIMC(peso, altura)
-                              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
-                              setClassificacaoImcNovo(classifyIMC(imc))
-                              // massas
-                              const gPct = parseNumber(gorduraPercentualNovoInput)
-                              const mg = calculateMassaGordura(gPct, peso)
-                              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
-                              const mlg = calculateMassaLivreGordura(peso, mg)
-                              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
-                              const mr = calculateMassaResidual(peso)
-                              setMassaResidualNovo(mr ? mr.toFixed(2).replace(".", ",") : "")
-                              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
-                              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
-                              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
-                            }}
-                            placeholder="70,5"
-                          />
-                        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label>Peso (kg)</Label>
+          <Input
+            value={pesoNovo}
+            onChange={(e) => {
+              const v = e.target.value
+              setPesoNovo(v)
+              const peso = parseNumber(v)
+              const altura = parseNumber(alturaNova)
+              const imc = calculateIMC(peso, altura)
+              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
+              setClassificacaoImcNovo(classifyIMC(imc))
+              const gPct = parseNumber(gorduraPercentualNovoInput)
+              const mg = calculateMassaGordura(gPct, peso)
+              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+              const mlg = calculateMassaLivreGordura(peso, mg)
+              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+              const mr = calculateMassaResidual(peso)
+              setMassaResidualNovo(mr ? mr.toFixed(2).replace(".", ",") : "")
+              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+            }}
+            placeholder="70,5"
+          />
+        </div>
 
-                        <div className="grid gap-2">
-                          <Label>Altura (cm)</Label>
-                          <Input
-                            value={alturaNova}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setAlturaNova(v)
-                              const peso = parseNumber(pesoNovo)
-                              const altura = parseNumber(v)
-                              const imc = calculateIMC(peso, altura)
-                              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
-                              setClassificacaoImcNovo(classifyIMC(imc))
-                            }}
-                            placeholder="170"
-                          />
-                        </div>
+        <div className="grid gap-2">
+          <Label>Altura (cm)</Label>
+          <Input
+            value={alturaNova}
+            onChange={(e) => {
+              const v = e.target.value
+              setAlturaNova(v)
+              const peso = parseNumber(pesoNovo)
+              const altura = parseNumber(v)
+              const imc = calculateIMC(peso, altura)
+              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
+              setClassificacaoImcNovo(classifyIMC(imc))
+            }}
+            placeholder="170"
+          />
+        </div>
 
-                        <div className="grid gap-2">
-                          <Label>Cintura (cm)</Label>
-                          <Input
-                            value={cinturaNovo}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setCinturaNovo(v)
-                              const rcq = calculateRCQ(parseNumber(v), parseNumber(quadrilNovo))
-                              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
-                              setRiscoRcqNovo(classifyRCQ(rcq, patient?.sexo))
-                            }}
-                            placeholder="82"
-                          />
-                        </div>
+        <div className="grid gap-2">
+          <Label>Cintura (cm)</Label>
+          <Input
+            value={cinturaNovo}
+            onChange={(e) => {
+              const v = e.target.value
+              setCinturaNovo(v)
+              const rcq = calculateRCQ(parseNumber(v), parseNumber(quadrilNovo))
+              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
+              setRiscoRcqNovo(classifyRCQ(rcq, sexoAvaliacao))
+            }}
+            placeholder="82"
+          />
+        </div>
 
-                        <div className="grid gap-2">
-                          <Label>Quadril (cm)</Label>
-                          <Input
-                            value={quadrilNovo}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setQuadrilNovo(v)
-                              const rcq = calculateRCQ(parseNumber(cinturaNovo), parseNumber(v))
-                              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
-                              setRiscoRcqNovo(classifyRCQ(rcq, patient?.sexo))
-                            }}
-                            placeholder="95"
-                          />
-                        </div>
+        <div className="grid gap-2">
+          <Label>Quadril (cm)</Label>
+          <Input
+            value={quadrilNovo}
+            onChange={(e) => {
+              const v = e.target.value
+              setQuadrilNovo(v)
+              const rcq = calculateRCQ(parseNumber(cinturaNovo), parseNumber(v))
+              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
+              setRiscoRcqNovo(classifyRCQ(rcq, sexoAvaliacao))
+            }}
+            placeholder="95"
+          />
+        </div>
 
-                        <div className="grid gap-2">
-                          <Label>Braço (cm)</Label>
-                          <Input
-                            value={bracoNovo}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setBracoNovo(v)
-                              const cmb = calculateCMB(parseNumber(v))
-                              setCmbNovo(cmb ? cmb.toFixed(2).replace(".", ",") : "")
-                              setClassificacaoCmbNovo(classifyCMB(cmb))
-                            }}
-                            placeholder="30"
-                          />
-                        </div>
+        <div className="grid gap-2">
+          <Label>Braço (cm)</Label>
+          <Input
+            value={bracoNovo}
+            onChange={(e) => {
+              const v = e.target.value
+              setBracoNovo(v)
+              const cmb = calculateCMB(parseNumber(v))
+              setCmbNovo(cmb ? cmb.toFixed(2).replace(".", ",") : "")
+              setClassificacaoCmbNovo(classifyCMB(cmb))
+            }}
+            placeholder="30"
+          />
+        </div>
 
-                        <div className="grid gap-2">
-                          <Label>% Gordura</Label>
-                          <Input
-                            value={gorduraPercentualNovoInput}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setGorduraPercentualNovoInput(v)
-                              const g = parseNumber(v)
-                              setClassificacaoGorduraNovo(classifyGordura(g))
-                              // massas
-                              const peso = parseNumber(pesoNovo)
-                              const mg = calculateMassaGordura(g, peso)
-                              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
-                              const mlg = calculateMassaLivreGordura(peso, mg)
-                              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
-                              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
-                              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
-                              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
-                            }}
-                            placeholder="22,5"
-                          />
-                        </div>
+        <div className="grid gap-2">
+          <Label>% Gordura (manual)</Label>
+          <Input
+            value={gorduraPercentualNovoInput}
+            onChange={(e) => {
+              const v = e.target.value
+              setGorduraPercentualNovoInput(v)
+              const g = parseNumber(v)
+              setClassificacaoGorduraNovo(classifyGordura(g))
+              const peso = parseNumber(pesoNovo)
+              const mg = calculateMassaGordura(g, peso)
+              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+              const mlg = calculateMassaLivreGordura(peso, mg)
+              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+            }}
+            placeholder="22,5"
+          />
+        </div>
+      </div>
+    </section>
 
-                       {/* ====== Protocolo de dobras ====== */}
-<div className="grid gap-2 md:col-span-2 lg:col-span-3 border rounded-lg p-3">
-  <div className="grid gap-3 md:grid-cols-3">
-    <div className="grid gap-1">
-      <Label>Protocolo</Label>
-      <select
-        className="border rounded p-2 bg-background"
-        value={protocoloDobras}
-        onChange={(e) => setProtocoloDobras(e.target.value as "pollock3" | "pollock7")}
-      >
-        <option value="pollock3">Jackson & Pollock (3 dobras)</option>
-        <option value="pollock7">Jackson & Pollock (7 dobras)</option>
-      </select>
-    </div>
+    {/* ======= Coluna 2: DOBRAS ======= */}
+    <section className="space-y-4">
+      <div className="rounded-lg border p-3 space-y-3">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-1 md:col-span-2">
+            <Label>Protocolo</Label>
+            <select
+              className="border rounded p-2 bg-background"
+              value={protocoloDobras}
+              onChange={(e) => setProtocoloDobras(e.target.value as "pollock3" | "pollock7")}
+            >
+              <option value="pollock3">Jackson & Pollock (3 dobras)</option>
+              <option value="pollock7">Jackson & Pollock (7 dobras)</option>
+            </select>
+          </div>
 
-    <div className="grid gap-1">
-      <Label>Sexo para cálculo</Label>
-      <select
-        className="border rounded p-2 bg-background"
-        value={sexoAvaliacao}
-        onChange={(e) => setSexoAvaliacao(e.target.value)}
-      >
-        <option value="feminino">Feminino</option>
-        <option value="masculino">Masculino</option>
-      </select>
-      <p className="text-xs text-muted-foreground">Usa fórmulas específicas por sexo.</p>
-    </div>
+          <div className="grid gap-1">
+            <Label>Sexo para cálculo</Label>
+            <select
+              className="border rounded p-2 bg-background"
+              value={sexoAvaliacao}
+              onChange={(e) => setSexoAvaliacao(e.target.value)}
+            >
+              <option value="feminino">Feminino</option>
+              <option value="masculino">Masculino</option>
+            </select>
+          </div>
+        </div>
 
-    <div className="grid gap-1">
-      <Label>Somatório de Dobras (mm)</Label>
-      <Input value={somatorioDobrasNovo} disabled placeholder="Calculado" />
+        <div className="grid gap-1">
+          <Label>Somatório de Dobras (mm)</Label>
+          <Input value={somatorioDobrasNovo} disabled placeholder="Calculado" />
+        </div>
+
+        {/* Campos por dobra */}
+        <div className="grid gap-3 mt-3 md:grid-cols-2">
+          {/* Coxa sempre aparece */}
+          <div className="grid gap-1">
+            <Label>Coxa (mm)</Label>
+            <Input value={dobraCoxa} onChange={(e) => setDobraCoxa(e.target.value)} placeholder="ex: 18" />
+          </div>
+
+          {/* Pollock 3 – masculino */}
+          {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("m") && (
+            <>
+              <div className="grid gap-1">
+                <Label>Peitoral (mm)</Label>
+                <Input value={dobraPeitoral} onChange={(e) => setDobraPeitoral(e.target.value)} placeholder="ex: 10" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Abdominal (mm)</Label>
+                <Input value={dobraAbdominal} onChange={(e) => setDobraAbdominal(e.target.value)} placeholder="ex: 20" />
+              </div>
+            </>
+          )}
+
+          {/* Pollock 3 – feminino */}
+          {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("f") && (
+            <>
+              <div className="grid gap-1">
+                <Label>Tricipital (mm)</Label>
+                <Input value={dobraTricipital} onChange={(e) => setDobraTricipital(e.target.value)} placeholder="ex: 18" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Supra-ilíaca (mm)</Label>
+                <Input value={dobraSupraIliaca} onChange={(e) => setDobraSupraIliaca(e.target.value)} placeholder="ex: 16" />
+              </div>
+            </>
+          )}
+
+          {/* Pollock 7 – todos os 7 pontos */}
+          {protocoloDobras === "pollock7" && (
+            <>
+              <div className="grid gap-1">
+                <Label>Peitoral (mm)</Label>
+                <Input value={dobraPeitoral} onChange={(e) => setDobraPeitoral(e.target.value)} placeholder="ex: 10" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Axilar média (mm)</Label>
+                <Input value={dobraAxilarMedia} onChange={(e) => setDobraAxilarMedia(e.target.value)} placeholder="ex: 12" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Tricipital (mm)</Label>
+                <Input value={dobraTricipital} onChange={(e) => setDobraTricipital(e.target.value)} placeholder="ex: 18" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Subescapular (mm)</Label>
+                <Input value={dobraSubescapular} onChange={(e) => setDobraSubescapular(e.target.value)} placeholder="ex: 14" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Abdominal (mm)</Label>
+                <Input value={dobraAbdominal} onChange={(e) => setDobraAbdominal(e.target.value)} placeholder="ex: 20" />
+              </div>
+              <div className="grid gap-1">
+                <Label>Supra-ilíaca (mm)</Label>
+                <Input value={dobraSupraIliaca} onChange={(e) => setDobraSupraIliaca(e.target.value)} placeholder="ex: 16" />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Saídas de dobras */}
+        <div className="grid gap-3 mt-3 md:grid-cols-2">
+          <div className="grid gap-1">
+            <Label>Densidade Corporal (g/mL)</Label>
+            <Input value={densidadeCorporalNovoInput} disabled placeholder="Calculado" />
+          </div>
+          <div className="grid gap-1">
+            <Label>% Gordura (Siri)</Label>
+            <Input value={gorduraPercentualNovoInput} disabled placeholder="Calculado" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* ======= Coluna 3: RESULTADOS ======= */}
+    <section className="space-y-4">
+      <div className="rounded-lg border p-3 grid gap-3">
+        <div className="grid gap-1">
+          <Label>IMC</Label>
+          <Input value={imcNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Classificação IMC</Label>
+          <Input value={classificacaoImcNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>RCQ</Label>
+          <Input value={rcqNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Risco por RCQ</Label>
+          <Input value={riscoRcqNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>CMB</Label>
+          <Input value={cmbNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Classificação CMB</Label>
+          <Input value={classificacaoCmbNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Classificação Gordura</Label>
+          <Input value={classificacaoGorduraNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Massa de Gordura (kg)</Label>
+          <Input value={massaGorduraNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Massa Residual (kg)</Label>
+          <Input value={massaResidualNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>Massa Livre (kg)</Label>
+          <Input value={massaLivreGorduraNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>% Massa gorda</Label>
+          <Input value={massaGorduraPercentNovo} disabled placeholder="Calculado" />
+        </div>
+        <div className="grid gap-1">
+          <Label>% Massa livre</Label>
+          <Input value={massaLivreGorduraPercentNovo} disabled placeholder="Calculado" />
+        </div>
+      </div>
+    </section>
+
+    {/* Botão Salvar (linha inteira) */}
+    <div className="lg:col-span-3 flex justify-center">
+      <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+        <Button
+          onClick={async () => {
+            if (!user?.email || !patient) return
+            const nova: any = {
+              data: dataNovaMetrica,
+              peso: parseNumber(pesoNovo),
+              altura: parseNumber(alturaNova),
+              cintura: parseNumber(cinturaNovo),
+              quadril: parseNumber(quadrilNovo),
+              braco: parseNumber(bracoNovo),
+              somatorioDobras: parseNumber(somatorioDobrasNovo),
+              densidadeCorporal: parseNumber(densidadeCorporalNovoInput),
+              imc: imcNovo ? Number(imcNovo.replace(",", ".")) : undefined,
+              classificacaoImc: classificacaoImcNovo || undefined,
+              rcq: rcqNovo ? Number(rcqNovo.replace(",", ".")) : undefined,
+              riscoRcq: riscoRcqNovo || undefined,
+              cmb: cmbNovo ? Number(cmbNovo.replace(",", ".")) : undefined,
+              classificacaoCmb: classificacaoCmbNovo || undefined,
+              gorduraPercentual: parseNumber(gorduraPercentualNovoInput),
+              classificacaoGordura: classificacaoGorduraNovo || undefined,
+              massaGordura: massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined,
+              massaResidual: massaResidualNovo ? Number(massaResidualNovo.replace(",", ".")) : undefined,
+              massaLivreGordura: massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined,
+              massaGorduraPercent: massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined,
+              massaLivreGorduraPercent: massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined,
+            }
+
+            try {
+              const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+              const snap = await getDoc(refp)
+              const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+              const filtrado = hist.filter((m) => m.data !== nova.data)
+              const atualizado = [...filtrado, nova].sort(
+                (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+              )
+              await updateDoc(refp, { historicoMetricas: atualizado })
+              setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
+              setMetricas(atualizado)
+              toast({ title: "Nova métrica salva com sucesso!" })
+            } catch (error) {
+              console.error(error)
+              toast({
+                title: "Erro ao salvar métrica",
+                description: "Verifique os campos e tente novamente.",
+                variant: "destructive",
+              })
+            }
+          }}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+        >
+          Salvar Medição
+        </Button>
+      </div>
     </div>
   </div>
+</CardContent>
 
-  {/* Campos por dobra */}
-  <div className="grid gap-3 mt-3 md:grid-cols-3">
-    {/* Comuns: Coxa sempre aparece */}
-    <div className="grid gap-1">
-      <Label>Coxa (mm)</Label>
-      <Input
-        value={dobraCoxa}
-        onChange={(e) => setDobraCoxa(e.target.value)}
-        placeholder="ex: 18"
-      />
-    </div>
-
-    {/* Pollock 3 – masculino: Peitoral, Abdominal */}
-    {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("m") && (
-      <>
-        <div className="grid gap-1">
-          <Label>Peitoral (mm)</Label>
-          <Input
-            value={dobraPeitoral}
-            onChange={(e) => setDobraPeitoral(e.target.value)}
-            placeholder="ex: 10"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Abdominal (mm)</Label>
-          <Input
-            value={dobraAbdominal}
-            onChange={(e) => setDobraAbdominal(e.target.value)}
-            placeholder="ex: 20"
-          />
-        </div>
-      </>
-    )}
-
-    {/* Pollock 3 – feminino: Tricipital, Supra-ilíaca */}
-    {protocoloDobras === "pollock3" && (sexoAvaliacao || "").toLowerCase().startsWith("f") && (
-      <>
-        <div className="grid gap-1">
-          <Label>Tricipital (mm)</Label>
-          <Input
-            value={dobraTricipital}
-            onChange={(e) => setDobraTricipital(e.target.value)}
-            placeholder="ex: 18"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Supra-ilíaca (mm)</Label>
-          <Input
-            value={dobraSupraIliaca}
-            onChange={(e) => setDobraSupraIliaca(e.target.value)}
-            placeholder="ex: 16"
-          />
-        </div>
-      </>
-    )}
-
-    {/* Pollock 7 – mostra todos os 7 pontos */}
-    {protocoloDobras === "pollock7" && (
-      <>
-        <div className="grid gap-1">
-          <Label>Peitoral (mm)</Label>
-          <Input
-            value={dobraPeitoral}
-            onChange={(e) => setDobraPeitoral(e.target.value)}
-            placeholder="ex: 10"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Axilar média (mm)</Label>
-          <Input
-            value={dobraAxilarMedia}
-            onChange={(e) => setDobraAxilarMedia(e.target.value)}
-            placeholder="ex: 12"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Tricipital (mm)</Label>
-          <Input
-            value={dobraTricipital}
-            onChange={(e) => setDobraTricipital(e.target.value)}
-            placeholder="ex: 18"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Subescapular (mm)</Label>
-          <Input
-            value={dobraSubescapular}
-            onChange={(e) => setDobraSubescapular(e.target.value)}
-            placeholder="ex: 14"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Abdominal (mm)</Label>
-          <Input
-            value={dobraAbdominal}
-            onChange={(e) => setDobraAbdominal(e.target.value)}
-            placeholder="ex: 20"
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label>Supra-ilíaca (mm)</Label>
-          <Input
-            value={dobraSupraIliaca}
-            onChange={(e) => setDobraSupraIliaca(e.target.value)}
-            placeholder="ex: 16"
-          />
-        </div>
-      </>
-    )}
-  </div>
-
-  {/* Saídas calculadas */}
-  <div className="grid gap-3 mt-3 md:grid-cols-3">
-    <div className="grid gap-1">
-      <Label>Densidade Corporal (g/mL)</Label>
-      <Input value={densidadeCorporalNovoInput} disabled placeholder="Calculado" />
-    </div>
-    <div className="grid gap-1">
-      <Label>% Gordura (Siri)</Label>
-      <Input value={gorduraPercentualNovoInput} disabled placeholder="Calculado" />
-    </div>
-  </div>
-</div>
-
-
-                        {/* Calculados (desabilitados) */}
-                        <div className="grid gap-2">
-                          <Label>IMC</Label>
-                          <Input value={imcNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Classificação IMC</Label>
-                          <Input value={classificacaoImcNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>RCQ</Label>
-                          <Input value={rcqNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Risco por RCQ</Label>
-                          <Input value={riscoRcqNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>CMB</Label>
-                          <Input value={cmbNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Classificação CMB</Label>
-                          <Input value={classificacaoCmbNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Classificação Gordura</Label>
-                          <Input value={classificacaoGorduraNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Massa de Gordura (kg)</Label>
-                          <Input value={massaGorduraNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Massa Residual (kg)</Label>
-                          <Input value={massaResidualNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Massa Livre (kg)</Label>
-                          <Input value={massaLivreGorduraNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>% Massa gorda</Label>
-                          <Input value={massaGorduraPercentNovo} disabled placeholder="Calculado" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>% Massa livre</Label>
-                          <Input value={massaLivreGorduraPercentNovo} disabled placeholder="Calculado" />
-                        </div>
-                      </div>
-
-                      {/* Botão salvar */}
-                      <div className="flex justify-center mt-4">
-                        <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
-                          <Button
-                            onClick={async () => {
-                              if (!user?.email || !patient) return
-                              const nova: any = {
-                                data: dataNovaMetrica,
-                                peso: parseNumber(pesoNovo),
-                                altura: parseNumber(alturaNova),
-                                cintura: parseNumber(cinturaNovo),
-                                quadril: parseNumber(quadrilNovo),
-                                braco: parseNumber(bracoNovo),
-                                somatorioDobras: parseNumber(somatorioDobrasNovo),
-                                densidadeCorporal: parseNumber(densidadeCorporalNovoInput),
-                                imc: imcNovo ? Number(imcNovo.replace(",", ".")) : undefined,
-                                classificacaoImc: classificacaoImcNovo || undefined,
-                                rcq: rcqNovo ? Number(rcqNovo.replace(",", ".")) : undefined,
-                                riscoRcq: riscoRcqNovo || undefined,
-                                cmb: cmbNovo ? Number(cmbNovo.replace(",", ".")) : undefined,
-                                classificacaoCmb: classificacaoCmbNovo || undefined,
-                                gorduraPercentual: parseNumber(gorduraPercentualNovoInput),
-                                classificacaoGordura: classificacaoGorduraNovo || undefined,
-                                massaGordura: massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined,
-                                massaResidual: massaResidualNovo ? Number(massaResidualNovo.replace(",", ".")) : undefined,
-                                massaLivreGordura: massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined,
-                                massaGorduraPercent: massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined,
-                                massaLivreGorduraPercent: massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined,
-                              }
-
-                              try {
-                                const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
-                                const snap = await getDoc(refp)
-                                const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
-                                // substitui se mesma data, senão adiciona
-                                const filtrado = hist.filter((m) => m.data !== nova.data)
-                                const atualizado = [...filtrado, nova].sort(
-                                  (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
-                                )
-                                await updateDoc(refp, { historicoMetricas: atualizado })
-                                setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
-                                setMetricas(atualizado)
-                                toast({ title: "Nova métrica salva com sucesso!" })
-
-                                // limpa campos
-                                setDataNovaMetrica("")
-                                setPesoNovo("")
-                                setAlturaNova("")
-                                setCinturaNovo("")
-                                setQuadrilNovo("")
-                                setBracoNovo("")
-                                setGorduraPercentualNovoInput("")
-                                setSomatorioDobrasNovo("")
-                                setDensidadeCorporalNovoInput("")
-                                setImcNovo("")
-                                setClassificacaoImcNovo("")
-                                setRcqNovo("")
-                                setRiscoRcqNovo("")
-                                setCmbNovo("")
-                                setClassificacaoCmbNovo("")
-                                setClassificacaoGorduraNovo("")
-                                setMassaGorduraNovo("")
-                                setMassaResidualNovo("")
-                                setMassaLivreGorduraNovo("")
-                                setMassaGorduraPercentNovo("")
-                                setMassaLivreGorduraPercentNovo("")
-                              } catch (error) {
-                                console.error(error)
-                                toast({
-                                  title: "Erro ao salvar métrica",
-                                  description: "Verifique os campos e tente novamente.",
-                                  variant: "destructive",
-                                })
-                              }
-                            }}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-                          >
-                            Salvar Medição
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
                 </Card>
               </TabsContent>
             </Tabs>
