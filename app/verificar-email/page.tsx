@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { sendEmailVerification } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -16,6 +16,10 @@ export default function VerificarEmailPage() {
   const [resending, setResending] = useState(false);
   const [checking, setChecking] = useState(false);
 
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (typeof window !== "undefined" ? window.location.origin : "");
+
   const reenviar = async () => {
     if (!auth.currentUser) {
       toast({ title: "Sessão expirada", description: "Faça login novamente.", variant: "destructive" });
@@ -24,10 +28,16 @@ export default function VerificarEmailPage() {
     }
     setResending(true);
     try {
-      await sendEmailVerification(auth.currentUser);
-      toast({ title: "E-mail reenviado", description: `Verifique sua caixa de entrada ${email ? `(${email})` : ""}.` });
+      await sendEmailVerification(auth.currentUser, {
+        url: `${appUrl}/auth/action`,
+        handleCodeInApp: true,
+      });
+      toast({
+        title: "E-mail reenviado",
+        description: `Verifique sua caixa de entrada ${email ? `(${email})` : ""}.`,
+      });
     } catch (e: any) {
-      toast({ title: "Falha ao reenviar", description: e.message || "Tente novamente.", variant: "destructive" });
+      toast({ title: "Falha ao reenviar", description: e?.message || "Tente novamente.", variant: "destructive" });
     } finally {
       setResending(false);
     }
@@ -42,7 +52,7 @@ export default function VerificarEmailPage() {
     await auth.currentUser.reload();
     if (auth.currentUser.emailVerified) {
       toast({ title: "E-mail verificado!", description: "Redirecionando…" });
-      router.push("/login"); // ou "/" se quiser cair no dashboard
+      router.push("/login"); // ou "/" se preferir
     } else {
       toast({ title: "Ainda não verificado", description: "Confirme pelo link enviado ao seu e-mail." });
     }
@@ -70,3 +80,4 @@ export default function VerificarEmailPage() {
     </div>
   );
 }
+
