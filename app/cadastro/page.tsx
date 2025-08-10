@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, LineChart } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,12 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  sendEmailVerification,
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export default function CadastroPage() {
   const [name, setName] = useState("");
@@ -36,11 +39,16 @@ export default function CadastroPage() {
 
     try {
       // 🔐 Cria usuário no Firebase Auth (email/senha)
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
+      // 📧 Envia verificação de e-mail
+      await sendEmailVerification(user, {
+        url: `${appUrl}/login?verified=1`, // ao confirmar, pode voltar pro login (ajuste se quiser)
+        handleCodeInApp: false,
+      });
 
       // 🗂️ Salva dados no Firestore com ID = UID
-      await setDoc(doc(db, "nutricionistas", uid), {
+      await setDoc(doc(db, "nutricionistas", user.uid), {
         nome: name,
         email,
         plano: "teste",
@@ -50,11 +58,11 @@ export default function CadastroPage() {
       });
 
       toast({
-        title: "Cadastro realizado!",
-        description: "Sua conta foi criada com sucesso. Faça login.",
+        title: "Verifique seu e-mail",
+        description: `Enviamos um link de confirmação para ${email}.`,
       });
 
-      router.push("/login");
+      router.push(`/verificar-email?email=${encodeURIComponent(email)}`);
     } catch (error: any) {
       console.error("Erro ao cadastrar:", error);
       toast({
@@ -90,12 +98,26 @@ export default function CadastroPage() {
         });
       }
 
+      // Google geralmente já é verificado, mas por via das dúvidas:
+      if (!user.emailVerified && user.email) {
+        await sendEmailVerification(user, {
+          url: `${appUrl}/login?verified=1`,
+          handleCodeInApp: false,
+        });
+        toast({
+          title: "Verifique seu e-mail",
+          description: `Enviamos um link de confirmação para ${user.email}.`,
+        });
+        router.push(`/verificar-email?email=${encodeURIComponent(user.email)}`);
+        return;
+      }
+
       toast({
         title: "Login realizado!",
         description: "Bem-vindo(a) ao NutriDash.",
       });
 
-      router.push("/"); // ajuste o destino conforme sua UX (ex: /dashboard)
+      router.push("/"); // ajuste o destino conforme sua UX
     } catch (error: any) {
       console.error("Erro no login com Google:", error);
       toast({
