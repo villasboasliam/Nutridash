@@ -110,7 +110,9 @@ export default function PatientDetailPage() {
   // Estado geral
   const [metricas, setMetricas] = useState<MetricaEntry[]>([])
   const params = useParams()
-  const id = decodeURIComponent(params?.id as string)
+const rawId = (params?.id as string | undefined) ?? ""
+const id = rawId ? decodeURIComponent(rawId) : ""
+
   const pathname = usePathname()
   const router = useRouter()
   const [user, loading] = useAuthState(auth)
@@ -435,6 +437,30 @@ export default function PatientDetailPage() {
       toast({ title: "Erro ao excluir material individual", description: "Não foi possível remover o material." })
     }
   }
+const handleDeleteDiet = async (dietaToDelete: any) => {
+  if (!user?.email || !patient) return
+
+  try {
+    const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refPaciente, { dietas: arrayRemove(dietaToDelete) })
+
+    // Tenta limpar no Storage (ignora erro se não encontrar o arquivo)
+    try {
+      const storageRefPath = ref(storage, `pacientes/${id}/dietas/${dietaToDelete.nome}`)
+      await deleteObject(storageRefPath)
+    } catch {}
+
+    // Atualiza estado local
+    setPatient((prev: any) =>
+      prev ? { ...prev, dietas: (prev.dietas || []).filter((d: any) => d.url !== dietaToDelete.url) } : prev
+    )
+
+    toast({ title: "Dieta excluída com sucesso" })
+  } catch (error) {
+    console.error(error)
+    toast({ title: "Erro ao excluir dieta", description: "Não foi possível remover o arquivo." })
+  }
+}
 
   // ===== Firestore: buscar/atualizar/excluir paciente =====
   const fetchPatient = async () => {
@@ -455,7 +481,10 @@ export default function PatientDetailPage() {
       console.error("Erro ao buscar paciente ou métricas:", error)
     }
   }
-  useEffect(() => { fetchPatient() }, [id, user])
+  useEffect(() => {
+  if (!id || !user?.email) return
+  fetchPatient()
+}, [id, user])
 
   const handleSaveInfo = async () => {
     if (!user?.email) return
@@ -502,6 +531,7 @@ export default function PatientDetailPage() {
     setIsActive(!isActive)
     toast({ title: `Paciente ${novoStatus === "Ativo" ? "ativado" : "inativado"}` })
   }
+const isClient = typeof window !== "undefined"
 
   // ===== Layout (menu lateral original + header) =====
   return (
@@ -1335,7 +1365,7 @@ export default function PatientDetailPage() {
                 </Card>
 
                 {/* --------- Gráfico empilhado (cores roxo padrão) --------- */}
-                {metricas.length > 0 && (
+                {isClient && metricas.length > 0 && (
                   <Card className="mb-6">
                     <CardHeader>
                       <CardTitle>Composição corporal (%)</CardTitle>
@@ -1670,6 +1700,34 @@ export default function PatientDetailPage() {
         </main>
       </div>
     </div>
+  )
+}
+function SidebarLinks({ pathname, t }: { pathname: string, t: any }) {
+  const links = [
+    { href: "/", label: t("dashboard"), icon: Home },
+    { href: "/pacientes", label: t("patients"), icon: Users },
+    { href: "/materiais", label: "Materiais", icon: FileText },
+    { href: "/financeiro", label: "Financeiro", icon: LineChart },
+    { href: "/perfil", label: t("profile"), icon: Users },
+  ]
+
+  return (
+    <>
+      {links.map(({ href, label, icon: Icon }) => (
+        <Link
+          key={href}
+          href={href}
+          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+            pathname === href || pathname.startsWith(`${href}/`)
+              ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
+              : "text-foreground hover:bg-muted"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+          {label}
+        </Link>
+      ))}
+    </>
   )
 }
 
