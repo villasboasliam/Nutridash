@@ -363,7 +363,7 @@ export default function PatientDetailPage() {
   ]
   function bdDurnin(sum4: number, age: number, sexo: string) {
     if (!sum4 || !age) return 0
-    const row = DURNIN_TABLE.find(r => age>=r.min && age<=r.max) ?? DURNIN_TABLE.at(-1)!
+    const row = DURNIN_TABLE.find(r => age>=r.min && age<=r.max) ?? DURNIN_TABLE[DURNIN_TABLE.length - 1]
     const male = (sexo||"").toLowerCase().startsWith("m")
     const c = male ? row.cM : row.cF
     const m = male ? row.mM : row.mF
@@ -526,7 +526,7 @@ export default function PatientDetailPage() {
 
   const uploadPDF = async (file: File, patientId: string) => {
     if (!file) return null;
-    const storageRef = ref(storage, pacientes/${patientId}/dietas/${file.name});
+    const storageRef = ref(storage, `pacientes/${patientId}/dietas/${file.name}`);
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
@@ -534,7 +534,7 @@ export default function PatientDetailPage() {
 
   const uploadIndividualPDF = async (file: File, patientId: string) => {
     if (!file) return null;
-    const storageRef = ref(storage, pacientes/${patientId}/materiais_individuais/${file.name});
+    const storageRef = ref(storage, `pacientes/${patientId}/materiais_individuais/${file.name}`);
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
@@ -611,8 +611,8 @@ export default function PatientDetailPage() {
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id);
       await updateDoc(refPaciente, { fotos: novasFotos });
       if (fotoToDelete.nomeArquivo) {
-        const storageRef = ref(storage, pacientes/${id}/fotos/${fotoToDelete.nomeArquivo});
-        await deleteObject(storageRef);
+        const storageRefObj = ref(storage, `pacientes/${id}/fotos/${fotoToDelete.nomeArquivo}`);
+        await deleteObject(storageRefObj);
       }
       setPatient((prev: any) => ({ ...prev, fotos: novasFotos }));
       toast({ title: "Foto excluída com sucesso" });
@@ -632,7 +632,11 @@ export default function PatientDetailPage() {
     if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." }); return; }
     if (!selectedPhoto) { toast({ title: "Nenhuma foto selecionada", description: "Por favor, selecione uma foto." }); return; }
     try {
-      const downloadURL = await uploadPhoto(selectedPhoto, id, ${tipoFoto.replace(/\s+/g, "_")}_${Date.now()});
+      const downloadURL = await uploadPhoto(
+        selectedPhoto,
+        id,
+        `${tipoFoto.replace(/\s+/g, "_")}_${Date.now()}`
+      );
       const novaFoto = { dataEnvio: new Date().toLocaleDateString("pt-BR"), tipo: tipoFoto, url: downloadURL };
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id);
       await updateDoc(refPaciente, { fotos: arrayUnion(novaFoto) });
@@ -653,7 +657,7 @@ export default function PatientDetailPage() {
     if (!nomeMaterialIndividual.trim()) { toast({ title: "Erro", description: "Informe o nome do material." }); return; }
     setIsSubmittingIndividualMaterial(true);
     try {
-      const storageRefPath = pacientes/${id}/materiais_individuais/${file.name};
+      const storageRefPath = `pacientes/${id}/materiais_individuais/${file.name}`;
       const storageRefUpload = ref(storage, storageRefPath);
       const snapshot = await uploadBytes(storageRefUpload, file);
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -691,7 +695,7 @@ export default function PatientDetailPage() {
     try {
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id);
       await updateDoc(refPaciente, { materiaisIndividuais: arrayRemove(materialToDelete) });
-      const storageRefPath = ref(storage, pacientes/${id}/materiais_individuais/${materialToDelete.nome});
+      const storageRefPath = ref(storage, `pacientes/${id}/materiais_individuais/${materialToDelete.nome}`);
       try { await deleteObject(storageRefPath); } catch (e) {}
       setIndividualMaterials(prev => prev.filter(m => m.url !== materialToDelete.url));
       setPatient((prev:any)=> ({
@@ -710,7 +714,7 @@ export default function PatientDetailPage() {
     try {
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id);
       await updateDoc(refPaciente, { dietas: arrayRemove(dietaToDelete) });
-      const storageRefPath = ref(storage, pacientes/${id}/dietas/${dietaToDelete.nome});
+      const storageRefPath = ref(storage, `pacientes/${id}/dietas/${dietaToDelete.nome}`);
       try { await deleteObject(storageRefPath); } catch (e) {}
       setPatient((prev: any) => ({ ...prev, dietas: (prev?.dietas || []).filter((d: any) => d.url !== dietaToDelete.url) }));
       toast({ title: "Dieta excluída com sucesso" });
@@ -800,7 +804,7 @@ export default function PatientDetailPage() {
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth()+1).padStart(2,"0")
     const dd = String(d.getDate()).padStart(2,"0")
-    return ${yyyy}-${mm}-${dd}
+    return `${yyyy}-${mm}-${dd}`
   }
 
   const salvarNovaMetrica = async () => {
@@ -848,1034 +852,420 @@ export default function PatientDetailPage() {
         n(skinfolds.supraespinhal)
       ].filter(v=>v>0).reduce((a,b)=>a+b,0),
 
-      densidadeCorporal: densidadeCorporalCalc ? Number(densidadeCorporalCalc.replace(",", ".")) : parseNumber(densidadeCorporalNovoInput),
-      gorduraPercentual: gorduraPercentualPorDobras ? Number(gorduraPercentualPorDobras.replace(",", ".")) : parseNumber(gorduraPercentualNovoInput),
+      // campos calculados
+      imc: (() => {
+        const v = calculateIMC(pesoNum, parseNumber(alturaNova))
+        return v ? Number(v.toFixed(2)) : undefined
+      })(),
+      classificacaoImc: (() => {
+        const v = calculateIMC(pesoNum, parseNumber(alturaNova))
+        return v ? classifyIMC(v) : undefined
+      })(),
+      rcq: (() => {
+        const v = calculateRCQ(parseNumber(cinturaNovo), parseNumber(quadrilNovo))
+        return v ? Number(v.toFixed(2)) : undefined
+      })(),
+      riscoRcq: (() => {
+        const v = calculateRCQ(parseNumber(cinturaNovo), parseNumber(quadrilNovo))
+        return v ? classifyRCQ(v, patient?.sexo) : undefined
+      })(),
+      cmb: (() => {
+        const v = calculateCMB(parseNumber(bracoNovo))
+        return v ? Number(v.toFixed(2)) : undefined
+      })(),
+      classificacaoCmb: (() => {
+        const v = calculateCMB(parseNumber(bracoNovo))
+        return v ? classifyCMB(v) : undefined
+      })(),
 
-      imc: imcNovo ? Number(imcNovo.replace(",", ".")) : 0,
-      classificacaoImc: classificacaoImcNovo,
-      rcq: rcqNovo ? Number(rcqNovo.replace(",", ".")) : 0,
-      riscoRcq: riscoRcqNovo,
-      cmb: cmbNovo ? Number(cmbNovo.replace(",", ".")) : 0,
-      classificacaoCmb: classificacaoCmbNovo,
-      classificacaoGordura: classificacaoGorduraNovo,
+      // gordura %: prioridade -> input manual > cálculo por dobras
+      gorduraPercentual: (() => {
+        const manual = parseNumber(gorduraPercentualNovoInput)
+        if (manual > 0) return Number(manual.toFixed(1))
+        const porDobras = (gorduraPercentualPorDobras || "").replace(",", ".")
+        const v = Number(porDobras)
+        return v > 0 ? Number(v.toFixed(1)) : undefined
+      })(),
+      classificacaoGordura: (() => {
+        const manual = parseNumber(gorduraPercentualNovoInput)
+        if (manual > 0) return classifyGordura(manual)
+        const porDobras = Number((gorduraPercentualPorDobras || "").replace(",", "."))
+        return porDobras > 0 ? classifyGordura(porDobras) : undefined
+      })(),
 
-      massaGordura: mgKg || 0,
-      massaResidual: massaResidualNovo ? Number(massaResidualNovo.replace(",", ".")) : 0,
-      massaLivreGordura: mlgKg || 0,
+      massaGordura: mgKg ? Number(mgKg.toFixed(2)) : undefined,
+      massaResidual: mlgKg || mgKg ? Number(calculateMassaResidual(pesoNum).toFixed(2)) : undefined,
+      massaLivreGordura: mlgKg ? Number(mlgKg.toFixed(2)) : undefined,
+      massaGorduraPercent: mgPerc ? Number(mgPerc.toFixed(1)) : undefined,
+      massaLivreGorduraPercent: mlgPerc ? Number(mlgPerc.toFixed(1)) : (mgPerc ? Number((100 - mgPerc).toFixed(1)) : undefined),
 
-      // (5) Persistindo % massa gorda / % massa livre
-      massaGorduraPercent: Number(mgPerc.toFixed(1)),
-      massaLivreGorduraPercent: Number(mlgPerc.toFixed(1)),
-    };
+      // densidade corporal: prioridade -> input manual > cálculo por dobras
+      densidadeCorporal: (() => {
+        const manual = parseNumber(densidadeCorporalNovoInput)
+        if (manual > 0) return Number(manual.toFixed(3))
+        const bd = Number((densidadeCorporalCalc || "").replace(",", "."))
+        return bd > 0 ? Number(bd.toFixed(3)) : undefined
+      })(),
+    }
 
     try {
-      const pacienteRef = doc(db, "nutricionistas", user.email, "pacientes", id);
-      await updateDoc(pacienteRef, { historicoMetricas: arrayUnion(novaMetrica) });
-      await fetchPatient();
-      toast({ title: "Nova métrica salva com sucesso!" });
+      const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+      const snap = await getDoc(refp)
+      const hist: MetricaEntry[] = (snap.exists() ? (snap.data().historicoMetricas || []) : []) as MetricaEntry[]
 
-      // Limpar campos
-      setDataNovaMetrica("");
-      setPesoNovo("");
-      setAlturaNova("");
-      setCinturaNovo("");
-      setQuadrilNovo("");
-      setBracoNovo("");
-      setGorduraPercentualNovoInput("");
-      setSomatorioDobrasNovo("");
-      setDensidadeCorporalNovoInput("");
-      setImcNovo("");
-      setClassificacaoImcNovo("");
-      setRcqNovo("");
-      setRiscoRcqNovo("");
-      setCmbNovo("");
-      setClassificacaoCmbNovo("");
-      setClassificacaoGorduraNovo("");
-      setMassaGorduraNovo("");
-      setMassaResidualNovo("");
-      setMassaLivreGorduraNovo("");
-      setMassaGorduraPercentNovo("");
-      setMassaLivreGorduraPercentNovo("");
+      // substitui a medição se já houver para a mesma data
+      const filtrado = hist.filter(m => m.data !== dataFinal)
+      const atualizado = [...filtrado, novaMetrica].sort(
+        (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+      )
+
+      await updateDoc(refp, { historicoMetricas: atualizado })
+
+      // atualiza estado local
+      setPatient(prev => prev ? { ...prev, historicoMetricas: atualizado } : prev)
+      setMetricas(atualizado)
+      setHistStart(Math.max(0, atualizado.length - HIST_WINDOW))
+
+      // limpa inputs
+      setDataNovaMetrica("")
+      setPesoNovo(""); setAlturaNova(""); setCinturaNovo(""); setQuadrilNovo(""); setBracoNovo("")
+      setGorduraPercentualNovoInput(""); setSomatorioDobrasNovo(""); setDensidadeCorporalNovoInput("")
       setSkinfolds({
         tricipital: "", bicipital: "", abdominal: "", subescapular: "",
         axilarMedia: "", coxa: "", toracica: "", suprailiaca: "",
         panturrilha: "", supraespinhal: "",
       })
-      setFormulaDobras("NONE")
-      setDensidadeCorporalCalc("")
-      setGorduraPercentualPorDobras("")
 
-    } catch (error) {
-      console.error("Erro ao salvar métrica:", error);
-      toast({ title: "Erro ao salvar métrica", description: "Verifique os campos e tente novamente.", variant: "destructive" });
+      toast({ title: "Medição salva", description: "Histórico atualizado com sucesso." })
+    } catch (e) {
+      console.error(e)
+      toast({ title: "Erro ao salvar medição", variant: "destructive" })
     }
-  };
+  }
 
-  // Dados ordenados do histórico (já vem ascendente)
-  const historicoAsc: MetricaEntry[] = useMemo(() => {
-    const list = (metricas || []) as MetricaEntry[]
-    // garantir ordem asc por segurança
-    return [...list].sort((a,b)=> new Date(a.data).getTime() - new Date(b.data).getTime())
-  }, [metricas])
+  // -------------------------------------------------------------------------------------
+  // Carrossel de histórico (5 colunas)
+  // -------------------------------------------------------------------------------------
+  const canPrev = histStart > 0
+  const canNext = histStart + HIST_WINDOW < metricas.length
+  const goPrev = () => setHistStart(s => (s > 0 ? s - 1 : s))
+  const goNext = () => setHistStart(s => (s + HIST_WINDOW < metricas.length ? s + 1 : s))
 
-  // Janela atual (carrossel)
-  const histLen = historicoAsc.length
-  const windowStart = Math.min(histStart, Math.max(0, histLen - HIST_WINDOW))
-  const windowEnd = Math.min(histLen, windowStart + HIST_WINDOW)
-  const historicoWindow = historicoAsc.slice(windowStart, windowEnd)
+  const janelaMetricas = useMemo(() => {
+    return metricas.slice(histStart, histStart + HIST_WINDOW)
+  }, [metricas, histStart])
 
-  const canPrev = windowStart > 0
-  const canNext = windowEnd < histLen
-
-  // Dados p/ gráfico empilhado
+  // Dados p/ gráfico empilhado (% massa gorda vs % livre)
   const chartData = useMemo(() => {
-    return historicoAsc.map((m) => {
-      const label = (m.data && !isNaN(new Date(m.data).getTime()))
-        ? new Date(m.data).toLocaleDateString("pt-BR")
-        : "Sem data"
-      let mgPerc = m.massaGorduraPercent
-      let mlgPerc = m.massaLivreGorduraPercent
-      // fallback se ainda não existirem nos históricos antigos
-      if ((mgPerc == null || isNaN(mgPerc)) && m.peso && m.massaGordura) {
-        mgPerc = (m.massaGordura / m.peso) * 100
-      }
-      if ((mlgPerc == null || isNaN(mlgPerc)) && mgPerc != null) {
-        mlgPerc = Math.max(0, 100 - mgPerc)
-      }
-      return {
-        nome: label,
-        massaGordaPct: mgPerc ? Number(mgPerc.toFixed(1)) : 0,
-        massaLivrePct: mlgPerc ? Number(mlgPerc.toFixed(1)) : (mgPerc != null ? Number((100 - mgPerc).toFixed(1)) : 0),
-      }
+    return metricas.map(m => {
+      const label = (() => {
+        // dd/mm
+        const d = new Date(m.data + "T12:00:00")
+        const dd = String(d.getDate()).padStart(2, "0")
+        const mm = String(d.getMonth() + 1).padStart(2, "0")
+        return `${dd}/${mm}`
+      })()
+      const mgp = (m.massaGorduraPercent ?? m.gorduraPercentual) || 0
+      const mlgp = m.massaLivreGorduraPercent ?? (mgp ? Math.max(0, 100 - mgp) : 0)
+      return { data: label, "Massa gorda (%)": Number(mgp.toFixed(1)), "Massa livre (%)": Number(mlgp.toFixed(1)) }
     })
-  }, [historicoAsc])
+  }, [metricas])
 
   // -------------------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------------------
-
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
-        <div className="flex h-14 items-center border-b px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-            <LineChart className="h-5 w-5" />
-            <span>NutriDash</span>
-          </Link>
+    <div className="min-h-screen">
+      {/* Topbar */}
+      <div className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 p-3">
+          <Button variant="ghost" onClick={() => router.back()}><ArrowLeft className="h-5 w-5" /></Button>
+          <div className="font-medium">{patient?.nome || "Paciente"}</div>
+          <div className="ml-auto"><ThemeToggle /></div>
         </div>
-        <nav className="flex-1 space-y-1 p-2">
-          <SidebarLinks pathname={pathname} t={t} />
-        </nav>
-      </aside>
+      </div>
 
-      <div className="flex flex-col flex-1 lg:ml-64">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="lg:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="flex h-14 items-center border-b px-4">
-                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                  <LineChart className="h-5 w-5" />
-                  <span>NutriDash</span>
-                </Link>
+      <div className="mx-auto grid max-w-6xl gap-6 p-4">
+        {/* ==================== Card: Métricas básicas ==================== */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Métricas básicas</CardTitle>
+            <CardDescription>Preencha e os cálculos aparecem automaticamente.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div>
+                <Label>Data da medição</Label>
+                <Input
+                  type="date"
+                  value={dataNovaMetrica || ""}
+                  onChange={(e) => setDataNovaMetrica(e.target.value)}
+                  placeholder={todayISO()}
+                />
               </div>
-              <nav className="flex-1 space-y-1 p-2">
-                <SidebarLinks pathname={pathname} t={t} />
-              </nav>
-            </SheetContent>
-          </Sheet>
-
-          <div className="w-full flex-1">
-            <div className="flex items-center">
-              <h2 className="text-lg font-medium">Detalhes do Paciente</h2>
-            </div>
-          </div>
-          <ThemeToggle />
-        </header>
-
-        <main className="flex-1 p-4 md:p-6">
-          <div className="max-w-4xl mx-auto w-full">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" asChild>
-                  <Link href="/pacientes">
-                    <ArrowLeft className="h-4 w-4" />
-                    <span className="sr-only">Voltar</span>
-                  </Link>
-                </Button>
-
-                <div className="flex items-center gap-2">
-                  <Switch id="patient-status" checked={isActive} onCheckedChange={togglePatientStatus} />
-                  <Label htmlFor="patient-status">
-                    {isActive ? "Paciente Ativo" : "Paciente Inativo"}
-                  </Label>
-                </div>
-
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive hover:bg-muted"
-                      title="Excluir paciente"
-                    >
-                      <Trash className="h-5 w-5" />
-                      <span className="sr-only">Excluir paciente</span>
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados do Firestore.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+              <div>
+                <Label>Peso (kg)</Label>
+                <Input value={pesoNovo} onChange={(e)=>setPesoNovo(e.target.value)} placeholder="Ex: 72,4" />
+              </div>
+              <div>
+                <Label>Altura (cm)</Label>
+                <Input value={alturaNova} onChange={(e)=>setAlturaNova(e.target.value)} placeholder="Ex: 172" />
+              </div>
+              <div>
+                <Label>Cintura (cm)</Label>
+                <Input value={cinturaNovo} onChange={(e)=>setCinturaNovo(e.target.value)} placeholder="Ex: 78" />
+              </div>
+              <div>
+                <Label>Quadril (cm)</Label>
+                <Input value={quadrilNovo} onChange={(e)=>setQuadrilNovo(e.target.value)} placeholder="Ex: 96" />
+              </div>
+              <div>
+                <Label>Circ. braço (cm)</Label>
+                <Input value={bracoNovo} onChange={(e)=>setBracoNovo(e.target.value)} placeholder="Ex: 29" />
               </div>
             </div>
 
-            {/* Informações pessoais */}
-            <Card className="mb-6">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div><CardTitle>Informações Pessoais</CardTitle></div>
-                <Button onClick={() => setEditInfoOpen(true)} className="bg-indigo-600 text-white hover:bg-indigo-700">Editar</Button>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Email</p>
-                  <p>{patient?.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
-                  <p>{patient?.telefone ? formatTelefone(patient.telefone) : "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
-                  <p>{patient?.birthdate ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</p>
-                </div>
-                {patient?.senhaProvisoria && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                      Senha Provisória
-                      <button type="button" onClick={() => setMostrarSenha((prev) => !prev)} className="text-indigo-600 text-xs">
-                        {mostrarSenha ? "Ocultar" : "Mostrar"}
-                      </button>
-                    </p>
-                    <p className="font-mono text-sm">{mostrarSenha ? patient.senhaProvisoria : "••••••••"}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Calculados resumidos */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <div>
+                <Label>IMC</Label>
+                <Input value={imcNovo} readOnly />
+              </div>
+              <div>
+                <Label>Class. IMC</Label>
+                <Input value={classificacaoImcNovo} readOnly />
+              </div>
+              <div>
+                <Label>RCQ</Label>
+                <Input value={rcqNovo} readOnly />
+              </div>
+              <div>
+                <Label>Risco RCQ</Label>
+                <Input value={riscoRcqNovo} readOnly />
+              </div>
+              <div>
+                <Label>CMB</Label>
+                <Input value={cmbNovo} readOnly />
+              </div>
+              <div>
+                <Label>Class. CMB</Label>
+                <Input value={classificacaoCmbNovo} readOnly />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* Modal Edit Info */}
-            <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Informações Pessoais</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid gap-1">
-                    <Label>Nome</Label>
-                    <Input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label>Email</Label>
-                    <Input value={editData.email} disabled className="opacity-60 cursor-not-allowed" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label>Telefone</Label>
+        {/* ==================== Card: Dobras cutâneas ==================== */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Dobras cutâneas</CardTitle>
+            <CardDescription>Mostra apenas as dobras do protocolo selecionado.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <Label>Protocolo</Label>
+                <select
+                  className="w-full rounded-md border bg-background p-2"
+                  value={formulaDobras}
+                  onChange={(e)=>setFormulaDobras(e.target.value as any)}
+                >
+                  <option value="NONE">—</option>
+                  <option value="POLLOCK3">Pollock 3</option>
+                  <option value="POLLOCK7">Pollock 7</option>
+                  <option value="DURNIN">Durnin & Womersley</option>
+                  <option value="FAULKNER">Faulkner</option>
+                  <option value="PETROSKI">Petroski</option>
+                  <option value="GUEDES">Guedes</option>
+                </select>
+              </div>
+              <div>
+                <Label>Método %G</Label>
+                <select
+                  className="w-full rounded-md border bg-background p-2"
+                  value={metodoPercentual}
+                  onChange={(e)=>setMetodoPercentual(e.target.value as any)}
+                >
+                  <option value="SIRI">Siri</option>
+                  <option value="BROZEK">Brozek</option>
+                </select>
+              </div>
+              <div>
+                <Label>% Gordura (manual)</Label>
+                <Input value={gorduraPercentualNovoInput} onChange={(e)=>setGorduraPercentualNovoInput(e.target.value)} placeholder="opcional" />
+              </div>
+              <div>
+                <Label>Densidade (manual)</Label>
+                <Input value={densidadeCorporalNovoInput} onChange={(e)=>setDensidadeCorporalNovoInput(e.target.value)} placeholder="opcional" />
+              </div>
+            </div>
+
+            {/* Campos de dobras conforme protocolo */}
+            {skinfoldFieldsForProtocol.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {skinfoldFieldsForProtocol.map((k) => (
+                  <div key={k}>
+                    <Label className="capitalize">{k}</Label>
                     <Input
-                      value={editData.telefone}
-                      onChange={(e) => {
-                        const onlyNumbers = e.target.value.replace(/\D/g, "").slice(0, 11)
-                        const match = onlyNumbers.match(/^(\d{2})(\d{5})(\d{4})$/)
-                        const formatted = match ? (${match[1]}) ${match[2]}-${match[3]} : onlyNumbers
-                        setEditData({ ...editData, telefone: formatted })
-                      }}
-                      placeholder="(99) 99999-9999"
+                      value={skinfolds[k]}
+                      onChange={(e)=>setSkinfolds(s => ({ ...s, [k]: e.target.value }))}
+                      placeholder="mm"
                     />
                   </div>
-                  <div className="grid gap-1">
-                    <Label>Data de Nascimento</Label>
-                    <Input type="date" value={editData.birthdate} onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })} />
-                  </div>
-                </div>
-                <DialogFooter className="mt-4">
-                  <Button
-                    type="button"
-                    onClick={async () => {
-                      setIsSaving(true)
-                      await handleSaveInfo()
-                      setIsSaving(false)
-                      setInfoParaEditar(null)
-                      toast({ title: "Sucesso", description: "Informações atualizadas" })
-                    }}
-                    disabled={isSaving}
-                    className="bg-indigo-600 text-white hover:bg-indigo-700"
-                  >
-                    {isSaving ? "Salvando..." : "Salvar"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Selecione um protocolo acima.</div>
+            )}
 
-            {/* Modal Edit Metrics simples (mantido) */}
-            <Dialog open={editMetricsOpen} onOpenChange={setEditMetricsOpen}>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Editar Métricas</DialogTitle></DialogHeader>
-                <div className="space-y-4">
-                  {Object.entries(editMetrics).map(([field, value]) => (
-                    <div key={field} className="grid gap-1">
-                      <Label>{field}</Label>
-                      <Input
-                        type="number"
-                        value={value}
-                        onChange={(e) => setEditMetrics({ ...editMetrics, [field]: Number(e.target.value) })}
-                      />
+            {/* Resultados do cálculo por dobras (se houver) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label>Densidade (calc.)</Label>
+                <Input value={densidadeCorporalCalc} readOnly />
+              </div>
+              <div>
+                <Label>% Gordura (calc.)</Label>
+                <Input value={gorduraPercentualPorDobras} readOnly />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ==================== Card: Resultados ==================== */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Resultados</CardTitle>
+            <CardDescription>Percentuais salvos e usados no gráfico.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <Label>Massa gorda (kg)</Label>
+                <Input value={massaGorduraNovo} readOnly />
+              </div>
+              <div>
+                <Label>Massa livre (kg)</Label>
+                <Input value={massaLivreGorduraNovo} readOnly />
+              </div>
+              <div>
+                <Label>Massa residual (kg)</Label>
+                <Input value={massaResidualNovo} readOnly />
+              </div>
+              <div>
+                <Label>% Massa gorda</Label>
+                <Input value={massaGorduraPercentNovo} readOnly />
+              </div>
+              <div>
+                <Label>% Massa livre</Label>
+                <Input value={massaLivreGorduraPercentNovo} readOnly />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={salvarNovaMetrica}>Salvar medição</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ==================== Histórico (carrossel 5 colunas) ==================== */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Histórico de medições</CardTitle>
+              <CardDescription>Ordem do mais antigo → mais novo. Use as setas para navegar.</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" disabled={!canPrev} onClick={goPrev}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" disabled={!canNext} onClick={goNext}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            {janelaMetricas.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Sem medições ainda.</div>
+            ) : (
+              <div className="min-w-[720px]">
+                <div className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 border-b pb-2 text-xs font-medium">
+                  <div className="text-muted-foreground">Métrica</div>
+                  {janelaMetricas.map((m) => (
+                    <div key={m.data} className="text-center">{new Date(m.data + "T12:00:00").toLocaleDateString("pt-BR")}</div>
+                  ))}
+                </div>
+
+                {[
+                  { k: "peso", label: "Peso (kg)", fmt: (v: any)=>v?.toFixed?.(1) ?? v },
+                  { k: "imc", label: "IMC" },
+                  { k: "classificacaoImc", label: "Class. IMC" },
+                  { k: "rcq", label: "RCQ" },
+                  { k: "riscoRcq", label: "Risco RCQ" },
+                  { k: "cmb", label: "CMB" },
+                  { k: "classificacaoCmb", label: "Class. CMB" },
+                  { k: "gorduraPercentual", label: "% Gordura" },
+                  { k: "classificacaoGordura", label: "Class. Gordura" },
+                  { k: "massaGorduraPercent", label: "% Massa gorda" },
+                  { k: "massaLivreGorduraPercent", label: "% Massa livre" },
+                  { k: "densidadeCorporal", label: "Densidade" },
+                  { k: "somatorioDobras", label: "Σ Dobras (mm)" },
+                ].map(row => (
+                  <div key={row.k} className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 py-2 text-sm">
+                    <div className="text-muted-foreground">{row.label}</div>
+                    {janelaMetricas.map((m) => {
+                      const raw: any = (m as any)[row.k]
+                      const val = typeof row.fmt === "function" ? row.fmt(raw) : raw
+                      return (
+                        <div key={m.data+"-"+row.k} className="text-center">
+                          {val ?? "-"}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+
+                {/* Ações por medição */}
+                <div className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 py-2 text-sm">
+                  <div className="text-muted-foreground">Ações</div>
+                  {janelaMetricas.map((m) => (
+                    <div key={m.data+"-actions"} className="flex items-center justify-center">
+                      <Button variant="destructive" size="sm" onClick={()=>excluirMetrica(m.data)}>
+                        <Trash className="mr-1 h-4 w-4" /> Excluir
+                      </Button>
                     </div>
                   ))}
                 </div>
-                <DialogFooter className="mt-4">
-                  <Button onClick={handleSaveMetrics} className="bg-indigo-600 text-white hover:bg-indigo-700">Salvar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-            {/* Tabs */}
-            <Tabs defaultValue="metricas" className="w-full mt-6">
-              <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
-                <TabsTrigger value="metricas">Métricas</TabsTrigger>
-                <TabsTrigger value="dietas">Dietas</TabsTrigger>
-                <TabsTrigger value="fotos">Fotos</TabsTrigger>
-                <TabsTrigger value="material-individual">Material Individual</TabsTrigger>
-              </TabsList>
-
-              {/* Aba Métricas */}
-              <TabsContent value="metricas" className="mt-4">
-                <Card className="mb-6">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle>Histórico de Métricas</CardTitle>
-                        <CardDescription>Veja o histórico de medições (5 por vez)</CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" disabled={!canPrev} onClick={()=> setHistStart(s => Math.max(0, s - HIST_WINDOW))}>
-                          <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" disabled={!canNext} onClick={()=> setHistStart(s => Math.min(Math.max(0, histLen - HIST_WINDOW), s + HIST_WINDOW))}>
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {historicoAsc.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left border">
-                          <thead className="bg-muted">
-                            <tr>
-                              <th className="text-left p-2">Métrica</th>
-                              {historicoWindow.map((item: any, index: number) => (
-                                <th key={index} className="text-center p-2 font-semibold">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <span>
-                                      {item.data && !isNaN(new Date(item.data).getTime())
-                                        ? new Date(item.data).toLocaleDateString("pt-BR")
-                                        : "Sem data"}
-                                    </span>
-
-                                    {/* Editar */}
-                                    <Dialog
-                                      open={!!metricaEditando}
-                                      onOpenChange={(open) => { if (!open) setMetricaEditando(null) }}
-                                    >
-                                      <DialogTrigger asChild>
-                                        <button
-                                          onClick={() => setMetricaEditando(item)}
-                                          className="text-blue-500 hover:text-blue-700 text-xs font-bold leading-none"
-                                          title="Editar esta medição"
-                                        >
-                                          <Pencil className="w-3 h-3" />
-                                        </button>
-                                      </DialogTrigger>
-
-                                      <DialogContent>
-                                        <DialogHeader>
-                                          <DialogTitle>Editar Métrica</DialogTitle>
-                                          <DialogDescription>
-                                            Atualize os valores da medição de <strong>
-                                              {item.data ? new Date(item.data).toLocaleDateString("pt-BR") : "Data inválida"}
-                                            </strong>.
-                                          </DialogDescription>
-                                        </DialogHeader>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto py-2 pr-2">
-                                          <div>
-                                            <Label htmlFor="peso-edit">Peso (kg)</Label>
-                                            <Input id="peso-edit" type="number" defaultValue={item.peso} onChange={(e) => (item.peso = Number(e.target.value))} />
-                                          </div>
-                                          <div>
-                                            <Label htmlFor="altura-edit">Altura (cm)</Label>
-                                            <Input id="altura-edit" type="number" defaultValue={item.altura} onChange={(e) => (item.altura = Number(e.target.value))} />
-                                          </div>
-                                          <div>
-                                            <Label htmlFor="cintura-edit">Cintura (cm)</Label>
-                                            <Input id="cintura-edit" type="number" defaultValue={item.cintura} onChange={(e) => (item.cintura = Number(e.target.value))} />
-                                          </div>
-                                          <div>
-                                            <Label htmlFor="quadril-edit">Quadril (cm)</Label>
-                                            <Input id="quadril-edit" type="number" defaultValue={item.quadril} onChange={(e) => (item.quadril = Number(e.target.value))} />
-                                          </div>
-                                          <div>
-                                            <Label htmlFor="braco-edit">Braço (cm)</Label>
-                                            <Input id="braco-edit" type="number" defaultValue={item.braco} onChange={(e) => (item.braco = Number(e.target.value))} />
-                                          </div>
-
-                                          {/* ---- Dobras no modal de edição ---- */}
-                                          {([
-                                            ["tricipital","Tricipital (mm)"],
-                                            ["bicipital","Bicipital (mm)"],
-                                            ["abdominal","Abdominal (mm)"],
-                                            ["subescapular","Subescapular (mm)"],
-                                            ["axilarMedia","Axilar Média (mm)"],
-                                            ["coxa","Coxa (mm)"],
-                                            ["toracica","Torácica/Peitoral (mm)"],
-                                            ["suprailiaca","Supra-ilíaca (mm)"],
-                                            ["panturrilha","Panturrilha (mm)"],
-                                            ["supraespinhal","Supraespinhal (mm)"],
-                                          ] as [SkinfoldKey,string][]).map(([k,label]) => (
-                                            <div key={k}>
-                                              <Label>{label}</Label>
-                                              <Input
-                                                type="number"
-                                                defaultValue={item?.dobras?.[k] ?? ""}
-                                                onChange={(e)=>{
-                                                  const v = Number(e.target.value)
-                                                  item.dobras = item.dobras || {}
-                                                  item.dobras[k] = isNaN(v) ? 0 : v
-                                                }}
-                                              />
-                                            </div>
-                                          ))}
-
-                                          <div>
-                                            <Label>Fórmula de Dobras</Label>
-                                            <select
-                                              defaultValue={item?.dobras?.formula || "NONE"}
-                                              onChange={(e)=>{
-                                                item.dobras = item.dobras || {}
-                                                item.dobras.formula = e.target.value as any
-                                              }}
-                                              className="border rounded px-2 py-1 w-full"
-                                            >
-                                              <option value="POLLOCK3">Pollock 3</option>
-                                              <option value="POLLOCK7">Pollock 7</option>
-                                              <option value="DURNIN">Durnin–Womersley</option>
-                                              <option value="FAULKNER">Faulkner</option>
-                                              <option value="NONE">Nenhuma</option>
-                                            </select>
-                                          </div>
-                                          <div>
-                                            <Label>Método % Gordura</Label>
-                                            <select
-                                              defaultValue={item?.dobras?.metodoPercentual || "SIRI"}
-                                              onChange={(e)=>{
-                                                item.dobras = item.dobras || {}
-                                                item.dobras.metodoPercentual = e.target.value as any
-                                              }}
-                                              className="border rounded px-2 py-1 w-full"
-                                            >
-                                              <option value="SIRI">Siri</option>
-                                              <option value="BROZEK">Brozek</option>
-                                            </select>
-                                          </div>
-
-                                          <div>
-                                            <Label>% Gordura</Label>
-                                            <Input
-                                              type="number"
-                                              defaultValue={item.gorduraPercentual}
-                                              onChange={(e) => (item.gorduraPercentual = Number(e.target.value))}
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label>Somatório de Dobras (mm)</Label>
-                                            <Input
-                                              type="number"
-                                              defaultValue={item.somatorioDobras}
-                                              onChange={(e) => (item.somatorioDobras = Number(e.target.value))}
-                                            />
-                                          </div>
-                                          <div>
-                                            <Label>Densidade Corporal</Label>
-                                            <Input
-                                              type="text"
-                                              defaultValue={item.densidadeCorporal}
-                                              onChange={(e) => (item.densidadeCorporal = Number(e.target.value))}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        <DialogFooter className="mt-4">
-                                          <Button
-                                            disabled={isSaving}
-                                            onClick={async () => {
-                                              setIsSaving(true)
-                                              const ref = doc(db, "nutricionistas", user?.email!, "pacientes", id);
-                                              const historicoAtualizado = (patient.historicoMetricas || []).map((m: any) =>
-                                                m.data === item.data ? item : m
-                                              )
-                                              await updateDoc(ref, { historicoMetricas: historicoAtualizado })
-                                              setPatient((prev: any) => ({ ...prev, historicoMetricas: historicoAtualizado }))
-                                              toast({ title: "Métrica atualizada com sucesso" })
-                                              setIsSaving(false)
-                                              setMetricaEditando(null)
-                                            }}
-                                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                                          >
-                                            {isSaving ? "Salvando..." : "Salvar Alterações"}
-                                          </Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
-
-                                    {/* Excluir */}
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <button
-                                          onClick={() => setMetricaParaExcluir(item)}
-                                          className="text-red-500 hover:text-red-700 text-xs font-bold leading-none"
-                                          title="Excluir esta medição"
-                                        >
-                                          ×
-                                        </button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Excluir Métrica</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Tem certeza que deseja excluir a métrica do dia {item.data}?
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            className="bg-red-600 hover:bg-red-700 text-white"
-                                            onClick={() => {
-                                              excluirMetrica(item.data)
-                                              setMetricaParaExcluir(null)
-                                            }}
-                                          >
-                                            Excluir
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                                                    <tbody>
-                            {[
-                              { k: "peso", label: "Peso (kg)", fmt: (v: any) => v?.toFixed?.(1) ?? v },
-                              { k: "altura", label: "Altura (cm)", fmt: (v: any) => v },
-                              { k: "cintura", label: "Cintura (cm)", fmt: (v: any) => v },
-                              { k: "quadril", label: "Quadril (cm)", fmt: (v: any) => v },
-                              { k: "braco", label: "Braço (cm)", fmt: (v: any) => v },
-                              { k: "imc", label: "IMC", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "classificacaoImc", label: "Classificação IMC", fmt: (v: any) => v },
-                              { k: "rcq", label: "RCQ", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "riscoRcq", label: "Risco RCQ", fmt: (v: any) => v },
-                              { k: "cmb", label: "CMB (cm)", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "classificacaoCmb", label: "Classificação CMB", fmt: (v: any) => v },
-                              { k: "gorduraPercentual", label: "% Gordura (entrada/cálculo)", fmt: (v: any) => (v!=null ? Number(v).toFixed(1) : v) },
-                              { k: "massaGordura", label: "Massa Gorda (kg)", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "massaLivreGordura", label: "Massa Livre (kg)", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "massaResidual", label: "Massa Residual (kg)", fmt: (v: any) => (v ? Number(v).toFixed(2) : v) },
-                              { k: "massaGorduraPercent", label: "% Massa Gorda", fmt: (v: any) => (v!=null ? Number(v).toFixed(1) : v) },
-                              { k: "massaLivreGorduraPercent", label: "% Massa Livre", fmt: (v: any) => (v!=null ? Number(v).toFixed(1) : v) },
-                              { k: "somatorioDobras", label: "Σ Dobras (mm)", fmt: (v: any) => v },
-                              { k: "densidadeCorporal", label: "Densidade Corporal", fmt: (v: any) => (v ? Number(v).toFixed(3) : v) },
-                            ].map((row) => (
-                              <tr key={row.k} className="border-t">
-                                <td className="p-2 font-medium">{row.label}</td>
-                                {historicoWindow.map((item:any, idx:number) => {
-                                  const raw = item[row.k as keyof typeof item] as any
-                                  const value = raw ?? "-"
-                                  const out = value === "-" ? "-" : row.fmt(value)
-                                  return (
-                                    <td key={idx} className="p-2 text-center">
-                                      {out ?? "-"}
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            ))}
-
-                            {/* Exibir as dobras visíveis na janela (apenas as principais) */}
-                            {([
-                              ["tricipital","Tricipital (mm)"],
-                              ["bicipital","Bicipital (mm)"],
-                              ["abdominal","Abdominal (mm)"],
-                              ["subescapular","Subescapular (mm)"],
-                              ["axilarMedia","Axilar Média (mm)"],
-                              ["coxa","Coxa (mm)"],
-                              ["toracica","Torácica/Peitoral (mm)"],
-                              ["suprailiaca","Supra-ilíaca (mm)"],
-                              ["panturrilha","Panturrilha (mm)"],
-                              ["supraespinhal","Supraespinhal (mm)"],
-                            ] as [SkinfoldKey,string][]).map(([k,label]) => (
-                              <tr key={k} className="border-t">
-                                <td className="p-2 font-medium">{label}</td>
-                                {historicoWindow.map((item:any, idx:number) => {
-                                  const v = item?.dobras?.[k]
-                                  return (
-                                    <td key={idx} className="p-2 text-center">
-                                      {v!=null && !isNaN(v) ? v : "-"}
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            ))}
-
-                            {/* Fórmula de dobras / Método usados */}
-                            <tr className="border-t">
-                              <td className="p-2 font-medium">Fórmula de Dobras</td>
-                              {historicoWindow.map((item:any, idx:number) => (
-                                <td key={idx} className="p-2 text-center">
-                                  {item?.dobras?.formula ?? "-"}
-                                </td>
-                              ))}
-                            </tr>
-                            <tr className="border-t">
-                              <td className="p-2 font-medium">Método % Gordura</td>
-                              {historicoWindow.map((item:any, idx:number) => (
-                                <td key={idx} className="p-2 text-center">
-                                  {item?.dobras?.metodoPercentual ?? "-"}
-                                </td>
-                              ))}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nenhuma métrica registrada ainda.</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Gráfico empilhado % massa gorda vs livre */}
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle>Composição Corporal (%)</CardTitle>
-                    <CardDescription>% de Massa Gorda x % de Massa Livre ao longo do tempo</CardDescription>
-                  </CardHeader>
-                  <CardContent style={{ width: "100%", height: 320 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="nome" />
-                        <YAxis domain={[0, 100]} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="massaGordaPct" stackId="a" name="% Massa Gorda" />
-                        <Bar dataKey="massaLivrePct" stackId="a" name="% Massa Livre" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                {/* NOVA MEDIÇÃO - três blocos com borda */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Métricas básicas */}
-                  <Card className="border rounded-lg">
-                    <CardHeader>
-                      <CardTitle>Métricas básicas</CardTitle>
-                      <CardDescription>Dados de entrada</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid gap-1">
-                        <Label>Data da medição</Label>
-                        <Input
-                          type="date"
-                          value={dataNovaMetrica}
-                          onChange={(e)=> setDataNovaMetrica(e.target.value)}
-                          placeholder="YYYY-MM-DD"
-                        />
-                        <p className="text-xs text-muted-foreground">Se vazio, será salvo como {todayISO()}</p>
-                      </div>
-
-                      <div className="grid gap-1">
-                        <Label>Peso (kg)</Label>
-                        <Input value={pesoNovo} onChange={(e)=>setPesoNovo(e.target.value)} placeholder="ex: 72,4" />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label>Altura (cm)</Label>
-                        <Input value={alturaNova} onChange={(e)=>setAlturaNova(e.target.value)} placeholder="ex: 172" />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label>Cintura (cm)</Label>
-                        <Input value={cinturaNovo} onChange={(e)=>setCinturaNovo(e.target.value)} placeholder="ex: 80" />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label>Quadril (cm)</Label>
-                        <Input value={quadrilNovo} onChange={(e)=>setQuadrilNovo(e.target.value)} placeholder="ex: 95" />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label>Braço (cm)</Label>
-                        <Input value={bracoNovo} onChange={(e)=>setBracoNovo(e.target.value)} placeholder="ex: 30" />
-                      </div>
-
-                      <div className="grid gap-1">
-                        <Label>% Gordura (manual)</Label>
-                        <Input value={gorduraPercentualNovoInput} onChange={(e)=>setGorduraPercentualNovoInput(e.target.value)} placeholder="opcional, ex: 21,5" />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label>Densidade Corporal (manual)</Label>
-                        <Input value={densidadeCorporalNovoInput} onChange={(e)=>setDensidadeCorporalNovoInput(e.target.value)} placeholder="opcional" />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Dobras cutâneas */}
-                  <Card className="border rounded-lg">
-                    <CardHeader>
-                      <CardTitle>Dobras cutâneas</CardTitle>
-                      <CardDescription>Mostra somente as dobras do protocolo</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid gap-1">
-                        <Label>Protocolo</Label>
-                        <select
-                          className="border rounded px-2 py-2"
-                          value={formulaDobras}
-                          onChange={(e)=> setFormulaDobras(e.target.value as any)}
-                        >
-                          <option value="NONE">Selecione</option>
-                          <option value="POLLOCK3">Pollock 3</option>
-                          <option value="POLLOCK7">Pollock 7</option>
-                          <option value="DURNIN">Durnin–Womersley</option>
-                          <option value="FAULKNER">Faulkner</option>
-                          <option value="PETROSKI" disabled>Petroski (em breve)</option>
-                          <option value="GUEDES" disabled>Guedes (em breve)</option>
-                        </select>
-                      </div>
-
-                      <div className="grid gap-1">
-                        <Label>Método % Gordura</Label>
-                        <select
-                          className="border rounded px-2 py-2"
-                          value={metodoPercentual}
-                          onChange={(e)=> setMetodoPercentual(e.target.value as any)}
-                        >
-                          <option value="SIRI">Siri</option>
-                          <option value="BROZEK">Brozek</option>
-                        </select>
-                      </div>
-
-                      {/* Campos visíveis conforme protocolo */}
-                      {(["tricipital","bicipital","abdominal","subescapular","axilarMedia","coxa","toracica","suprailiaca","panturrilha","supraespinhal"] as SkinfoldKey[])
-                        .filter(k => skinfoldFieldsForProtocol.includes(k))
-                        .map((k)=>(
-                          <div key={k} className="grid gap-1">
-                            <Label>
-                              {{
-                                tricipital: "Tricipital (mm)",
-                                bicipital: "Bicipital (mm)",
-                                abdominal: "Abdominal (mm)",
-                                subescapular: "Subescapular (mm)",
-                                axilarMedia: "Axilar Média (mm)",
-                                coxa: "Coxa (mm)",
-                                toracica: "Torácica/Peitoral (mm)",
-                                suprailiaca: "Supra-ilíaca (mm)",
-                                panturrilha: "Panturrilha (mm)",
-                                supraespinhal: "Supraespinhal (mm)",
-                              }[k]}
-                            </Label>
-                            <Input
-                              value={skinfolds[k]}
-                              onChange={(e)=> setSkinfolds(prev => ({ ...prev, [k]: e.target.value }))}
-                              placeholder="ex: 12"
-                            />
-                          </div>
-                        ))
-                      }
-                    </CardContent>
-                  </Card>
-
-                  {/* Resultados / calculados */}
-                  <Card className="border rounded-lg">
-                    <CardHeader>
-                      <CardTitle>Resultados</CardTitle>
-                      <CardDescription>Campos calculados automaticamente</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-1">
-                          <Label>IMC</Label>
-                          <Input value={imcNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Classificação IMC</Label>
-                          <Input value={classificacaoImcNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>RCQ</Label>
-                          <Input value={rcqNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Risco RCQ</Label>
-                          <Input value={riscoRcqNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>CMB (cm)</Label>
-                          <Input value={cmbNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Classificação CMB</Label>
-                          <Input value={classificacaoCmbNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>% Gordura (por dobras)</Label>
-                          <Input value={gorduraPercentualPorDobras} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Densidade Corporal (por dobras)</Label>
-                          <Input value={densidadeCorporalCalc} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Massa Gorda (kg)</Label>
-                          <Input value={massaGorduraNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Massa Livre (kg)</Label>
-                          <Input value={massaLivreGorduraNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>Massa Residual (kg)</Label>
-                          <Input value={massaResidualNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>% Massa Gorda</Label>
-                          <Input value={massaGorduraPercentNovo} disabled />
-                        </div>
-                        <div className="grid gap-1">
-                          <Label>% Massa Livre</Label>
-                          <Input value={massaLivreGorduraPercentNovo} disabled />
-                        </div>
-                      </div>
-
-                      <div className="pt-2">
-                        <Button onClick={salvarNovaMetrica} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
-                          Salvar nova medição
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              {/* Aba Dietas */}
-              <TabsContent value="dietas" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Dietas</CardTitle>
-                    <CardDescription>Envie, liste e remova PDFs</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <form onSubmit={handleReplaceDiet} className="grid md:grid-cols-3 gap-3 items-end">
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Nome exibido</Label>
-                        <Input value={nomeDieta} onChange={(e)=>setNomeDieta(e.target.value)} placeholder="Ex: Dieta Semanal" />
-                        {erroNomeDieta && <span className="text-xs text-red-600">Informe um nome para a dieta</span>}
-                      </div>
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Arquivo (PDF)</Label>
-                        <Input type="file" accept="application/pdf" onChange={(e)=> setSelectedPDF(e.target.files?.[0] ?? null)} />
-                      </div>
-                      <div className="md:col-span-1">
-                        <Button type="submit" disabled={isSubmittingDiet} className={submitButtonColorClass + " w-full"}>
-                          {submitButtonText}
-                        </Button>
-                      </div>
-                    </form>
-
-                    <div className="border rounded">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="p-2 text-left">Nome</th>
-                            <th className="p-2 text-left">Data</th>
-                            <th className="p-2 text-left">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(patient?.dietas || []).map((d:any, i:number)=> (
-                            <tr key={i} className="border-t">
-                              <td className="p-2">{d?.nomeDieta || d?.nome || "-"}</td>
-                              <td className="p-2">{d?.dataEnvio || "-"}</td>
-                              <td className="p-2">
-                                <div className="flex gap-2">
-                                  <Button asChild variant="outline" size="sm">
-                                    <a href={d.url} target="_blank" rel="noreferrer">Abrir</a>
-                                  </Button>
-                                  <Button variant="destructive" size="sm" onClick={()=> handleDeleteDiet(d)}>Excluir</Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {!(patient?.dietas || []).length && (
-                            <tr><td className="p-2 text-sm text-muted-foreground" colSpan={3}>Sem dietas enviadas.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Aba Fotos */}
-              <TabsContent value="fotos" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Fotos</CardTitle>
-                    <CardDescription>Envio e gerenciamento de fotos</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <form onSubmit={handleUploadPhotos} className="grid md:grid-cols-3 gap-3 items-end">
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Tipo</Label>
-                        <select className="border rounded px-2 py-2" value={tipoFoto} onChange={(e)=> setTipoFoto(e.target.value)}>
-                          <option>Foto Frontal</option>
-                          <option>Foto Lateral</option>
-                          <option>Foto Traseira</option>
-                        </select>
-                      </div>
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Arquivo (imagem)</Label>
-                        <Input type="file" accept="image/*" onChange={handlePhotoChange} />
-                      </div>
-                      <div className="md:col-span-1">
-                        <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">Enviar Foto</Button>
-                      </div>
-                    </form>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {(patient?.fotos || []).map((f:any, i:number)=> (
-                        <div key={i} className="border rounded p-2">
-                          <div className="aspect-square relative overflow-hidden rounded">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={f.url} alt={f.tipo || "Foto"} className="object-cover w-full h-full" />
-                          </div>
-                          <div className="mt-2 flex items-center justify-between text-xs">
-                            <span className="truncate">{f?.tipo || "-"}</span>
-                            <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={()=> handleDeletePhoto(f)}>
-                              <Trash className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {!(patient?.fotos || []).length && (
-                        <p className="text-sm text-muted-foreground col-span-full">Sem fotos cadastradas.</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Aba Material Individual */}
-              <TabsContent value="material-individual" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Material Individual</CardTitle>
-                    <CardDescription>Envie PDFs personalizados por paciente</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <form onSubmit={handleUploadIndividualMaterial} className="grid md:grid-cols-3 gap-3 items-end">
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Nome exibido</Label>
-                        <Input value={nomeMaterialIndividual} onChange={(e)=> setNomeMaterialIndividual(e.target.value)} placeholder="Ex: Treino A - Semana 1" />
-                      </div>
-                      <div className="grid gap-1 md:col-span-1">
-                        <Label>Arquivo (PDF)</Label>
-                        <Input type="file" accept="application/pdf" onChange={(e)=> setSelectedIndividualPDF(e.target.files?.[0] ?? null)} />
-                      </div>
-                      <div className="md:col-span-1">
-                        <Button type="submit" disabled={isSubmittingIndividualMaterial} className={submitIndividualMaterialColorClass + " w-full"}>
-                          {submitIndividualMaterialText}
-                        </Button>
-                      </div>
-                    </form>
-
-                    <div className="border rounded">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="p-2 text-left">Nome</th>
-                            <th className="p-2 text-left">Data</th>
-                            <th className="p-2 text-left">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(patient?.materiaisIndividuais || []).map((m:any, i:number)=> (
-                            <tr key={i} className="border-t">
-                              <td className="p-2">{m?.nomeMaterial || m?.nome || "-"}</td>
-                              <td className="p-2">{m?.dataEnvio || "-"}</td>
-                              <td className="p-2">
-                                <div className="flex gap-2">
-                                  <Button asChild variant="outline" size="sm">
-                                    <a href={m.url} target="_blank" rel="noreferrer">Abrir</a>
-                                  </Button>
-                                  <Button variant="destructive" size="sm" onClick={()=> handleDeleteIndividualMaterial(m)}>Excluir</Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {!(patient?.materiaisIndividuais || []).length && (
-                            <tr><td className="p-2 text-sm text-muted-foreground" colSpan={3}>Sem materiais enviados.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </main>
+        {/* ==================== Gráfico empilhado (% massa) ==================== */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Composição corporal (%)</CardTitle>
+            <CardDescription>Percentual de massa gorda e livre ao longo do tempo.</CardDescription>
+          </CardHeader>
+          <CardContent style={{ width: "100%", height: 360 }}>
+            {chartData.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Sem dados suficientes para o gráfico.</div>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="data" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="Massa gorda (%)" stackId="a" />
+                  <Bar dataKey="Massa livre (%)" stackId="a" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
-}
-
-/* ---------------------------------------------------
- * Helpers locais faltantes
- * --------------------------------------------------*/
-async function togglePatientStatus(checked: boolean) {
-  // Este handler precisa de acesso a user/email e id.
-  // Para manter o escopo do React, você pode mover essa função para dentro do componente
-  // e usar user/email/id do estado, ou transformar em callback com useCallback.
-  // Abaixo, deixo como "no-op" para não quebrar a continuidade se você já tiver
-  // um handler global importado. Caso queira integrá-lo dentro do componente,
-  // substitua por algo assim:
-
-  // const ref = doc(db, "nutricionistas", user!.email!, "pacientes", id)
-  // await updateDoc(ref, { status: checked ? "Ativo" : "Inativo" })
-  // setIsActive(checked)
-  // toast({ title: "Status atualizado" })
-
-  console.warn("togglePatientStatus chamado, implemente com seu contexto de user/id.");
 }
