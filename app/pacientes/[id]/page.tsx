@@ -1,14 +1,5 @@
 "use client"
 
-/* ---------------------------------------------------------------------------------------
- * PatientDetailPage_full.tsx
- * Estrutura completa com:
- * - Menu lateral fixo + Topbar
- * - Dados pessoais do paciente (editar, status, excluir)
- * - Abas: Dietas / Fotos / Materiais Individuais (upload, listar, excluir)
- * - (As métricas ficam nas Partes 2/3)
- * -------------------------------------------------------------------------------------*/
-
 import {
   getDocs,
   collection,
@@ -18,20 +9,34 @@ import {
   setDoc,
   deleteDoc,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
 } from "firebase/firestore"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { usePathname, useRouter, useParams } from "next/navigation"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db, storage } from "@/lib/firebase"
 import Link from "next/link"
 import Image from "next/image"
 import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogDescription, DialogTitle, DialogFooter
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogDescription,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
-  ArrowLeft, Camera, FileText, Home, LineChart, Menu, Upload,
-  Users, Trash, Pencil, ChevronLeft, ChevronRight, LogOut, KeyRound
+  ArrowLeft,
+  Camera,
+  FileText,
+  Home,
+  LineChart,
+  Menu,
+  Upload,
+  Users,
+  Trash,
+  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
 import { useToast } from "@/components/ui/use-toast"
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,22 +62,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Switch } from "@/components/ui/switch"
 
-// 📊 Recharts (usaremos nas Partes 2/3)
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  CartesianGrid,
-} from "recharts"
-
-// ---------------------------------------------------------------------------------------
-// Tipos auxiliares (métricas completas — serão usados nas Partes 2/3 também)
-// ---------------------------------------------------------------------------------------
-
+// ===== Tipos =====
 type MetricaEntry = {
   data: string
   peso?: number
@@ -79,6 +70,8 @@ type MetricaEntry = {
   cintura?: number
   quadril?: number
   braco?: number
+  somatorioDobras?: number
+  densidadeCorporal?: number
   imc?: number
   classificacaoImc?: string
   rcq?: number
@@ -92,42 +85,11 @@ type MetricaEntry = {
   massaLivreGordura?: number
   massaGorduraPercent?: number
   massaLivreGorduraPercent?: number
-  somatorioDobras?: number
-  densidadeCorporal?: number
-  dobras?: {
-    tricipital?: number
-    bicipital?: number
-    abdominal?: number
-    subescapular?: number
-    axilarMedia?: number
-    coxa?: number
-    toracica?: number
-    suprailiaca?: number
-    panturrilha?: number
-    supraespinhal?: number
-    formula?: "POLLOCK3"|"POLLOCK7"|"DURNIN"|"FAULKNER"|"PETROSKI"|"GUEDES"|"NONE"
-    metodoPercentual?: "SIRI"|"BROZEK"
-  }
 }
 
-type SkinfoldKey =
-  | "tricipital"
-  | "bicipital"
-  | "abdominal"
-  | "subescapular"
-  | "axilarMedia"
-  | "coxa"
-  | "toracica"
-  | "suprailiaca"
-  | "panturrilha"
-  | "supraespinhal"
-
-// ---------------------------------------------------------------------------------------
-// Página
-// ---------------------------------------------------------------------------------------
-
+// ===== Componente =====
 export default function PatientDetailPage() {
-  // Upload states
+  // Upload/diet/foto/material
   const [isDietUploaded, setIsDietUploaded] = useState(false)
   const [isPhotosUploaded, setIsPhotosUploaded] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
@@ -136,15 +98,17 @@ export default function PatientDetailPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null)
   const [tipoFoto, setTipoFoto] = useState("Foto Frontal")
 
-  // Material Individual
   const [selectedIndividualPDF, setSelectedIndividualPDF] = useState<File | null>(null)
   const [nomeMaterialIndividual, setNomeMaterialIndividual] = useState("")
   const [individualMaterials, setIndividualMaterials] = useState<any[]>([])
   const [isSubmittingIndividualMaterial, setIsSubmittingIndividualMaterial] = useState(false)
   const [submitIndividualMaterialText, setSubmitIndividualMaterialText] = useState("Enviar Material")
-  const [submitIndividualMaterialColorClass, setSubmitIndividualMaterialColorClass] = useState("bg-indigo-600 hover:bg-indigo-700")
+  const [submitIndividualMaterialColorClass, setSubmitIndividualMaterialColorClass] = useState(
+    "bg-indigo-600 hover:bg-indigo-700"
+  )
 
-  const [metricas, setMetricas] = useState<any[]>([])
+  // Estado geral
+  const [metricas, setMetricas] = useState<MetricaEntry[]>([])
   const params = useParams()
   const id = decodeURIComponent(params?.id as string)
   const pathname = usePathname()
@@ -152,11 +116,9 @@ export default function PatientDetailPage() {
   const [user, loading] = useAuthState(auth)
   const { t } = useLanguage()
   const { toast } = useToast()
-  const [showReplaceDietButton, setShowReplaceDietButton] = useState(false)
   const [patient, setPatient] = useState<any | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [dataNovaMetrica, setDataNovaMetrica] = useState("")
-  const [infoParaEditar, setInfoParaEditar] = useState<any>(null)
   const [metricaEditando, setMetricaEditando] = useState<any>(null)
   const [metricaParaExcluir, setMetricaParaExcluir] = useState<any | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -169,37 +131,7 @@ export default function PatientDetailPage() {
   const [submitButtonColorClass, setSubmitButtonColorClass] = useState("bg-indigo-600 hover:bg-indigo-700")
   const [erroNomeDieta, setErroNomeDieta] = useState(false)
 
-  // Estados de informações pessoais
-  const [editData, setEditData] = useState({
-    name: "",
-    email: "",
-    telefone: "",
-    birthdate: "",
-    valorConsulta: "",
-  })
-
-  useEffect(() => {
-    if (patient) {
-      setEditData({
-        name: patient.nome || "",
-        email: patient.email || "",
-        telefone: patient.telefone || "",
-        birthdate: patient.birthdate || "",
-        valorConsulta: patient.valorConsulta || "",
-      })
-    }
-  }, [patient])
-
-  // Estados de métricas simples (mantidos; usados nas Partes 2/3)
-  const [editMetrics, setEditMetrics] = useState({
-    peso: 0,
-    altura: 0,
-    gordura: 0,
-    massaMagra: 0,
-    cintura: 0,
-  })
-
-  // === Entradas base para nova medição (Partes 2/3) ===
+  // Entradas base (Métricas — preenchidas nas Partes 2/3)
   const [pesoNovo, setPesoNovo] = useState("")
   const [alturaNova, setAlturaNova] = useState("")
   const [cinturaNovo, setCinturaNovo] = useState("")
@@ -208,8 +140,7 @@ export default function PatientDetailPage() {
   const [gorduraPercentualNovoInput, setGorduraPercentualNovoInput] = useState("")
   const [somatorioDobrasNovo, setSomatorioDobrasNovo] = useState("")
   const [densidadeCorporalNovoInput, setDensidadeCorporalNovoInput] = useState("")
-
-  // Campos calculados (Partes 2/3)
+  // Calculados
   const [imcNovo, setImcNovo] = useState("")
   const [classificacaoImcNovo, setClassificacaoImcNovo] = useState("")
   const [rcqNovo, setRcqNovo] = useState("")
@@ -223,39 +154,54 @@ export default function PatientDetailPage() {
   const [massaGorduraPercentNovo, setMassaGorduraPercentNovo] = useState("")
   const [massaLivreGorduraPercentNovo, setMassaLivreGorduraPercentNovo] = useState("")
 
-  // === Dobras & Fórmulas (Partes 2/3) ===
-  const [skinfolds, setSkinfolds] = useState<Record<SkinfoldKey, string>>({
-    tricipital: "", bicipital: "", abdominal: "", subescapular: "",
-    axilarMedia: "", coxa: "", toracica: "", suprailiaca: "",
-    panturrilha: "", supraespinhal: "",
+  // Edição “simples” (mantido)
+  const [editData, setEditData] = useState({
+    name: "",
+    email: "",
+    telefone: "",
+    birthdate: "",
+    valorConsulta: "",
   })
-  const [formulaDobras, setFormulaDobras] = useState<"POLLOCK3"|"POLLOCK7"|"DURNIN"|"FAULKNER"|"PETROSKI"|"GUEDES"|"NONE">("NONE")
-  const [densidadeCorporalCalc, setDensidadeCorporalCalc] = useState("")
-  const [gorduraPercentualPorDobras, setGorduraPercentualPorDobras] = useState("")
-  const [metodoPercentual, setMetodoPercentual] = useState<"SIRI"|"BROZEK">("SIRI")
+  const [editMetrics, setEditMetrics] = useState({
+    peso: 0,
+    altura: 0,
+    gordura: 0,
+    massaMagra: 0,
+    cintura: 0,
+  })
 
-  // Carrossel do histórico (5 colunas) — Partes 2/3
-  const [histStart, setHistStart] = useState(0)
-  const HIST_WINDOW = 5
+  useEffect(() => {
+    if (patient) {
+      setEditData({
+        name: patient.nome || "",
+        email: patient.email || "",
+        telefone: patient.telefone || "",
+        birthdate: patient.birthdate || "",
+        valorConsulta: patient.valorConsulta || "",
+      })
+      setIsActive((patient.status || "Ativo") === "Ativo")
+    }
+  }, [patient])
 
-  // -------------------------------------------------------------------------------------
-  // Utils
-  // -------------------------------------------------------------------------------------
+  // ===== Utils (corrigidos) =====
   const parseNumber = (value: string) => {
     const cleanedValue = value.replace(",", ".")
     return isNaN(Number(cleanedValue)) || cleanedValue.trim() === "" ? 0 : Number(cleanedValue)
   }
+
   const formatTelefone = (telefone: string) => {
     const cleaned = telefone.replace(/\D/g, "")
     if (cleaned.length === 11) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`
     if (cleaned.length === 10) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`
     return telefone
   }
+
   const calculateIMC = useCallback((peso: number, altura: number) => {
     if (peso <= 0 || altura <= 0) return 0
     const alturaMetros = altura / 100
     return peso / (alturaMetros * alturaMetros)
   }, [])
+
   const classifyIMC = useCallback((imc: number) => {
     if (imc === 0) return ""
     if (imc < 18.5) return "Baixo Peso"
@@ -265,22 +211,25 @@ export default function PatientDetailPage() {
     if (imc <= 39.9) return "Obesidade Grau II"
     return "Obesidade Grau III"
   }, [])
+
   const calculateRCQ = useCallback((cintura: number, quadril: number) => {
     if (cintura <= 0 || quadril <= 0) return 0
     return cintura / quadril
   }, [])
+
   const classifyRCQ = useCallback((rcq: number, sexo: string = "feminino") => {
     if (rcq === 0) return ""
     if ((sexo || "").toLowerCase().startsWith("f")) {
-      if (rcq < 0.80) return "Baixo"
+      if (rcq < 0.8) return "Baixo"
       if (rcq <= 0.84) return "Moderado"
       return "Alto"
     } else {
-      if (rcq < 0.90) return "Baixo"
+      if (rcq < 0.9) return "Baixo"
       if (rcq <= 0.99) return "Moderado"
       return "Alto"
     }
   }, [])
+
   const calculateCMB = useCallback((braco: number) => braco, [])
   const classifyCMB = useCallback((cmb: number) => {
     if (cmb === 0) return ""
@@ -308,93 +257,7 @@ export default function PatientDetailPage() {
     return peso * 0.207
   }, [])
 
-  // Helpers dobras (Partes 2/3)
-  function getAgeFromBirthdate(birth?: string): number | null {
-    if (!birth) return null
-    const d = new Date(birth + "T12:00:00")
-    if (isNaN(d.getTime())) return null
-    const now = new Date()
-    let age = now.getFullYear() - d.getFullYear()
-    const m = now.getMonth() - d.getMonth()
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--
-    return age
-  }
-  function n(v: string) { const s=v?.replace?.(",", ".") ?? ""; const x=Number(s); return isNaN(x)?0:x }
-  function toPercentFatFromBD(bd: number, method: "SIRI"|"BROZEK" = "SIRI") {
-    if (!bd) return 0
-    return method === "SIRI" ? (495 / bd - 450) : (457 / bd - 414.2)
-  }
-  function bdPollock3(sum3: number, age: number, sexo: string) {
-    const m = (sexo||"").toLowerCase().startsWith("m")
-    return m
-      ? 1.10938 - 0.0008267*sum3 + 0.0000016*sum3*sum3 - 0.0002574*age
-      : 1.0994921 - 0.0009929*sum3 + 0.0000023*sum3*sum3 - 0.0001392*age
-  }
-  function bdPollock7(sum7: number, age: number, sexo: string) {
-    const m = (sexo||"").toLowerCase().startsWith("m")
-    return m
-      ? 1.112 - 0.00043499*sum7 + 0.00000055*sum7*sum7 - 0.00028826*age
-      : 1.097 - 0.00046971*sum7 + 0.00000056*sum7*sum7 - 0.00012828*age
-  }
-  type DMRow = { min:number; max:number; cM:number; mM:number; cF:number; mF:number }
-  const DURNIN_TABLE: DMRow[] = [
-    {min:17,max:19,cM:1.1620,mM:0.0630,cF:1.1549,mF:0.0678},
-    {min:20,max:29,cM:1.1631,mM:0.0632,cF:1.1599,mF:0.0717},
-    {min:30,max:39,cM:1.1422,mM:0.0544,cF:1.1423,mF:0.0632},
-    {min:40,max:49,cM:1.1620,mM:0.0700,cF:1.1333,mF:0.0612},
-    {min:50,max:120,cM:1.1715,mM:0.0779,cF:1.1339,mF:0.0645},
-  ]
-  function bdDurnin(sum4: number, age: number, sexo: string) {
-    if (!sum4 || !age) return 0
-    const row = DURNIN_TABLE.find(r => age>=r.min && age<=r.max) ?? DURNIN_TABLE[DURNIN_TABLE.length - 1]
-    const male = (sexo||"").toLowerCase().startsWith("m")
-    const c = male ? row.cM : row.cF
-    const m = male ? row.mM : row.mF
-    return c - m * Math.log10(sum4)
-  }
-  function percentFaulkner(sum4: number) {
-    if (!sum4) return 0
-    return 0.153 * sum4 + 5.783
-  }
-  function percentPetroski() { return null }
-  function percentGuedes() { return null }
-
-  // Quais dobras mostrar por protocolo (Partes 2/3)
-  const skinfoldFieldsForProtocol = useMemo(() => {
-    const sexo = (patient?.sexo || "feminino").toLowerCase()
-    const male = sexo.startsWith("m")
-    switch (formulaDobras) {
-      case "POLLOCK3":
-        return male ? (["toracica","abdominal","coxa"] as SkinfoldKey[]) : (["tricipital","suprailiaca","coxa"] as SkinfoldKey[])
-      case "POLLOCK7":
-        return ["toracica","axilarMedia","tricipital","subescapular","abdominal","suprailiaca","coxa"] as SkinfoldKey[]
-      case "DURNIN":
-        return ["tricipital","bicipital","subescapular","suprailiaca"] as SkinfoldKey[]
-      case "FAULKNER":
-        return ["tricipital","subescapular","suprailiaca","abdominal"] as SkinfoldKey[]
-      case "PETROSKI":
-      case "GUEDES":
-      case "NONE":
-      default:
-        return [] as SkinfoldKey[]
-    }
-  }, [formulaDobras, patient?.sexo])
-
-  // -------------------------------------------------------------------------------------
-  // Efeitos: recalcular métricas (implementados nas Partes 2/3)
-  // -------------------------------------------------------------------------------------
-
-  useEffect(() => {
-    // (Cálculos completos entram nas Partes 2/3 — mantemos aqui só placeholder para não quebrar)
-  }, [
-    pesoNovo, alturaNova, cinturaNovo, quadrilNovo, bracoNovo, gorduraPercentualNovoInput,
-    patient?.sexo, patient?.birthdate, skinfolds, formulaDobras, metodoPercentual
-  ])
-
-  // -------------------------------------------------------------------------------------
-  // Uploads e operações
-  // -------------------------------------------------------------------------------------
-
+  // ===== Upload helpers (paths corrigidos com template string) =====
   const uploadPhoto = async (file: File, patientId: string, imageName: string) => {
     if (!file) return null
     const storageRefObj = ref(storage, `pacientes/${patientId}/fotos/${imageName}`)
@@ -402,7 +265,6 @@ export default function PatientDetailPage() {
     const downloadURL = await getDownloadURL(snapshot.ref)
     return downloadURL
   }
-
   const uploadPDF = async (file: File, patientId: string) => {
     if (!file) return null
     const storageRefObj = ref(storage, `pacientes/${patientId}/dietas/${file.name}`)
@@ -410,7 +272,6 @@ export default function PatientDetailPage() {
     const downloadURL = await getDownloadURL(snapshot.ref)
     return downloadURL
   }
-
   const uploadIndividualPDF = async (file: File, patientId: string) => {
     if (!file) return null
     const storageRefObj = ref(storage, `pacientes/${patientId}/materiais_individuais/${file.name}`)
@@ -419,11 +280,18 @@ export default function PatientDetailPage() {
     return downloadURL
   }
 
+  // ===== Handlers Dieta / Foto / Material (detalhes das tabs na Parte 2) =====
   const handleReplaceDiet = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." }); return }
+    if (!user?.email) {
+      toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." })
+      return
+    }
     const file = selectedPDF
-    if (!file) { toast({ title: "Nenhum arquivo selecionado", description: "Selecione um PDF." }); return }
+    if (!file) {
+      toast({ title: "Nenhum arquivo selecionado", description: "Selecione um PDF." })
+      return
+    }
     if (!nomeDieta.trim()) { setErroNomeDieta(true); return } else { setErroNomeDieta(false) }
 
     setIsSubmittingDiet(true)
@@ -438,30 +306,22 @@ export default function PatientDetailPage() {
       const refPac = doc(db, "nutricionistas", user.email, "pacientes", id)
       await updateDoc(refPac, { dietas: arrayUnion(novaDieta) })
 
-      setPatient((prev: any) => {
-        if (!prev) return prev
-        return { ...prev, dietas: prev.dietas ? [...prev.dietas, novaDieta] : [novaDieta] }
-      })
+      setPatient((prev: any) => prev ? { ...prev, dietas: prev.dietas ? [...prev.dietas, novaDieta] : [novaDieta] } : prev)
 
+      // estatísticas (opcional)
       const statRef = doc(db, "nutricionistas", user.email, "estatisticas", "dietas")
       try {
         const statSnap = await getDoc(statRef)
         if (statSnap.exists()) {
           const atual = statSnap.data().totalDietasEnviadas || 0
-          await updateDoc(statRef, {
-            totalDietasEnviadas: atual + 1,
-            ultimaAtualizacao: new Date().toISOString(),
-          })
+          await updateDoc(statRef, { totalDietasEnviadas: atual + 1, ultimaAtualizacao: new Date().toISOString() })
         } else {
-          await setDoc(statRef, {
-            totalDietasEnviadas: 1,
-            ultimaAtualizacao: new Date().toISOString(),
-          })
+          await setDoc(statRef, { totalDietasEnviadas: 1, ultimaAtualizacao: new Date().toISOString() })
         }
-      } catch (error) {}
+      } catch {}
 
       setIsDietUploaded(true)
-      toast({ title: "Dieta enviada", description: "A dieta foi enviada com sucesso." })
+      toast({ title: "Dieta Enviada", description: "A dieta foi enviada com sucesso." })
       setSubmitButtonText("Enviado!")
       setSubmitButtonColorClass("bg-green-500 hover:bg-green-600")
       setTimeout(() => {
@@ -471,24 +331,9 @@ export default function PatientDetailPage() {
       }, 3000)
       setSelectedPDF(null); setNomeDieta("")
     } catch (error) {
-      console.error("Erro ao substituir a dieta:", error)
+      console.error(error)
       toast({ title: "Erro ao enviar dieta", description: "Não foi possível enviar o arquivo." })
       setIsSubmittingDiet(false)
-    }
-  }
-
-  const handleDeleteDiet = async (dietaToDelete: any) => {
-    if (!user?.email || !patient) return
-    try {
-      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
-      await updateDoc(refPaciente, { dietas: arrayRemove(dietaToDelete) })
-      const storageRefPath = ref(storage, `pacientes/${id}/dietas/${dietaToDelete.nome}`)
-      try { await deleteObject(storageRefPath) } catch (e) {}
-      setPatient((prev: any) => ({ ...prev, dietas: (prev?.dietas || []).filter((d: any) => d.url !== dietaToDelete.url) }))
-      toast({ title: "Dieta excluída com sucesso" })
-    } catch (error) {
-      console.error("Erro ao excluir dieta:", error)
-      toast({ title: "Erro ao excluir dieta", description: "Não foi possível remover o arquivo." })
     }
   }
 
@@ -499,22 +344,19 @@ export default function PatientDetailPage() {
 
   const handleUploadPhotos = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." }); return }
-    if (!selectedPhoto) { toast({ title: "Nenhuma foto selecionada", description: "Selecione uma imagem." }); return }
+    if (!user?.email) { toast({ title: "Erro", description: "Usuário não autenticado." }); return }
+    if (!selectedPhoto) { toast({ title: "Nenhuma foto selecionada", description: "Selecione uma foto." }); return }
+
     try {
-      const downloadURL = await uploadPhoto(
-        selectedPhoto,
-        id,
-        `${tipoFoto.replace(/\s+/g, "_")}_${Date.now()}`
-      )
-      const novaFoto = { dataEnvio: new Date().toLocaleDateString("pt-BR"), tipo: tipoFoto, url: downloadURL }
+      const downloadURL = await uploadPhoto(selectedPhoto, id, `${tipoFoto.replace(/\s+/g, "_")}_${Date.now()}`)
+      const novaFoto = { dataEnvio: new Date().toLocaleDateString("pt-BR"), tipo: tipoFoto, url: downloadURL, nomeArquivo: selectedPhoto.name }
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
       await updateDoc(refPaciente, { fotos: arrayUnion(novaFoto) })
-      setPatient((prev: any) => ({ ...prev, fotos: prev?.fotos ? [...prev.fotos, novaFoto] : [novaFoto] }))
+      setPatient((prev: any) => prev ? { ...prev, fotos: prev?.fotos ? [...prev.fotos, novaFoto] : [novaFoto] } : prev)
       toast({ title: "Foto enviada", description: "A foto foi enviada com sucesso." })
       setSelectedPhoto(null)
     } catch (error) {
-      console.error("Erro ao enviar foto:", error)
+      console.error(error)
       toast({ title: "Erro ao enviar foto", description: "Não foi possível enviar a foto." })
     }
   }
@@ -526,20 +368,19 @@ export default function PatientDetailPage() {
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
       await updateDoc(refPaciente, { fotos: novasFotos })
       if (fotoToDelete.nomeArquivo) {
-        const storageRefObj = ref(storage, `pacientes/${id}/fotos/${fotoToDelete.nomeArquivo}`)
-        try { await deleteObject(storageRefObj) } catch (e) {}
+        try { await deleteObject(ref(storage, `pacientes/${id}/fotos/${fotoToDelete.nomeArquivo}`)) } catch {}
       }
       setPatient((prev: any) => ({ ...prev, fotos: novasFotos }))
       toast({ title: "Foto excluída com sucesso" })
     } catch (error) {
-      console.error("Erro ao excluir foto:", error)
+      console.error(error)
       toast({ title: "Erro ao excluir foto", description: "Não foi possível remover a foto." })
     }
   }
 
   const handleUploadIndividualMaterial = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." }); return }
+    if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado." }); return }
     const file = selectedIndividualPDF
     if (!file) { toast({ title: "Nenhum arquivo selecionado", description: "Selecione um PDF." }); return }
     if (!nomeMaterialIndividual.trim()) { toast({ title: "Erro", description: "Informe o nome do material." }); return }
@@ -558,11 +399,11 @@ export default function PatientDetailPage() {
       }
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
       await updateDoc(refPaciente, { materiaisIndividuais: arrayUnion(novoMaterial) })
-      setPatient((prev: any) => ({
+      setPatient((prev: any) => prev ? {
         ...prev,
         materiaisIndividuais: prev?.materiaisIndividuais ? [...prev.materiaisIndividuais, novoMaterial] : [novoMaterial],
-      }))
-      toast({ title: "Material individual enviado", description: "Arquivo enviado com sucesso." })
+      } : prev)
+      toast({ title: "Material Individual Enviado", description: "Arquivo enviado com sucesso." })
       setSubmitIndividualMaterialText("Enviado!")
       setSubmitIndividualMaterialColorClass("bg-green-500 hover:bg-green-600")
       setTimeout(() => {
@@ -572,7 +413,7 @@ export default function PatientDetailPage() {
       }, 2000)
       setSelectedIndividualPDF(null); setNomeMaterialIndividual("")
     } catch (error) {
-      console.error("Erro ao enviar material individual:", error)
+      console.error(error)
       toast({ title: "Erro ao enviar material", description: "Não foi possível enviar o arquivo." })
       setIsSubmittingIndividualMaterial(false)
     }
@@ -583,22 +424,19 @@ export default function PatientDetailPage() {
     try {
       const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
       await updateDoc(refPaciente, { materiaisIndividuais: arrayRemove(materialToDelete) })
-      const storageRefPath = ref(storage, `pacientes/${id}/materiais_individuais/${materialToDelete.nome}`)
-      try { await deleteObject(storageRefPath) } catch (e) {}
-      setPatient((prev:any)=> ({
+      try { await deleteObject(ref(storage, `pacientes/${id}/materiais_individuais/${materialToDelete.nome}`)) } catch {}
+      setPatient((prev:any)=> prev ? {
         ...prev,
         materiaisIndividuais: (prev?.materiaisIndividuais || []).filter((m:any)=>m.url!==materialToDelete.url)
-      }))
-      toast({ title: "Material excluído", description: "O material foi removido com sucesso." })
+      } : prev)
+      toast({ title: "Material individual excluído", description: "O material foi removido com sucesso." })
     } catch (error) {
-      console.error("Erro ao excluir material individual:", error)
-      toast({ title: "Erro ao excluir material", description: "Não foi possível remover o material." })
+      console.error(error)
+      toast({ title: "Erro ao excluir material individual", description: "Não foi possível remover o material." })
     }
   }
 
-  // -------------------------------------------------------------------------------------
-  // Firestore: buscar, atualizar, excluir paciente
-  // -------------------------------------------------------------------------------------
+  // ===== Firestore: buscar/atualizar/excluir paciente =====
   const fetchPatient = async () => {
     if (!user?.email) return
     try {
@@ -607,18 +445,17 @@ export default function PatientDetailPage() {
       if (snap.exists()) {
         const data = snap.data()
         setPatient({ ...data })
-        const historico = data.historicoMetricas || []
-        historico.sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime())
+        const historico = (data.historicoMetricas || []) as MetricaEntry[]
+        // manter do mais antigo → mais novo para tabela por data (ajustaremos parte 3)
+        historico.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
         setMetricas(historico)
-        const len = historico.length
-        setHistStart(Math.max(0, len - HIST_WINDOW))
         setIsActive((data.status || "Ativo") === "Ativo")
       }
     } catch (error) {
-      console.error("Erro ao buscar paciente:", error)
+      console.error("Erro ao buscar paciente ou métricas:", error)
     }
   }
-  useEffect(() => { fetchPatient(); /* eslint-disable-next-line */ }, [id, user])
+  useEffect(() => { fetchPatient() }, [id, user])
 
   const handleSaveInfo = async () => {
     if (!user?.email) return
@@ -629,9 +466,24 @@ export default function PatientDetailPage() {
       birthdate: editData.birthdate,
       valorConsulta: editData.valorConsulta,
     })
-    setPatient((prev: any) => ({ ...prev, ...editData }))
+    setPatient((prev: any) => prev ? ({ ...prev, ...editData }) : prev)
     toast({ title: "Informações atualizadas com sucesso" })
     setEditInfoOpen(false)
+  }
+
+  const handleSaveMetrics = async () => {
+    if (!user?.email) return
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refp, {
+      peso_atual: editMetrics.peso,
+      altura: editMetrics.altura,
+      gordura: editMetrics.gordura,
+      massa_magra: editMetrics.massaMagra,
+      cintura: editMetrics.cintura,
+    })
+    setPatient((prev: any) => prev ? ({ ...prev, ...editMetrics }) : prev)
+    toast({ title: "Métricas atualizadas com sucesso" })
+    setEditMetricsOpen(false)
   }
 
   const handleDeletePatient = async () => {
@@ -642,1008 +494,1183 @@ export default function PatientDetailPage() {
     router.push("/pacientes")
   }
 
-  // Data hoje em YYYY-MM-DD (usado nas Partes 2/3)
-  function todayISO() {
-    const d = new Date()
-    const yyyy = d.getFullYear()
-    const mm = String(d.getMonth()+1).padStart(2,"0")
-    const dd = String(d.getDate()).padStart(2,"0")
-    return `${yyyy}-${mm}-${dd}`
+  const togglePatientStatus = async () => {
+    if (!user?.email) return
+    const novoStatus = isActive ? "Inativo" : "Ativo"
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refp, { status: novoStatus })
+    setIsActive(!isActive)
+    toast({ title: `Paciente ${novoStatus === "Ativo" ? "ativado" : "inativado"}` })
   }
 
-  // -------------------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------------------
+  // ===== Layout (menu lateral original + header) =====
   return (
-    <div className="min-h-screen">
-      {/* Topbar */}
-      <div className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 p-3">
-          <Button variant="ghost" onClick={() => router.push("/pacientes")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="font-medium truncate">{patient?.nome || "Paciente"}</div>
-          <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle />
-          </div>
+    <div className="flex min-h-screen">
+      {/* Sidebar fixa (idêntica ao original) */}
+      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+            <LineChart className="h-5 w-5" />
+            <span>NutriDash</span>
+          </Link>
         </div>
-      </div>
+        <nav className="flex-1 space-y-1 p-2">
+          <SidebarLinks pathname={pathname} t={t} />
+        </nav>
+      </aside>
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 md:grid-cols-[260px_1fr] gap-4 p-4">
-        {/* ==================== Sidebar ==================== */}
-        <aside className="hidden md:block">
-          <div className="sticky top-[64px] space-y-2">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Menu</CardTitle>
-                <CardDescription>Atalhos rápidos</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-1">
-                <Link href="/dashboard" className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-                  <Home className="h-4 w-4" /> Início
+      {/* Conteúdo */}
+      <div className="flex flex-col flex-1 lg:ml-64">
+        {/* Header */}
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="lg:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <div className="flex h-14 items-center border-b px-4">
+                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+                  <LineChart className="h-5 w-5" />
+                  <span>NutriDash</span>
                 </Link>
-                <Link href="/pacientes" className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-                  <Users className="h-4 w-4" /> Pacientes
-                </Link>
-                <a href="#arquivos" className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-                  <FileText className="h-4 w-4" /> Arquivos
-                </a>
-                <a href="#metricas" className="flex items-center gap-2 rounded-md p-2 hover:bg-muted">
-                  <LineChart className="h-4 w-4" /> Métricas
-                </a>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Status do paciente</CardTitle>
-                <CardDescription>Ativo / Inativo</CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <span className="text-sm">{isActive ? "Ativo" : "Inativo"}</span>
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={async (checked) => {
-                    setIsActive(checked)
-                    if (user?.email) {
-                      const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
-                      await updateDoc(refp, { status: checked ? "Ativo" : "Inativo" })
-                      toast({ title: "Status atualizado" })
-                    }
-                  }}
-                />
-              </CardContent>
-            </Card>
-
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="w-full">
-                  <Trash className="mr-2 h-4 w-4" /> Excluir paciente
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação é permanente e removerá todos os dados do paciente.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700">
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </div>
+              <nav className="flex-1 space-y-1 p-2">
+                <SidebarLinks pathname={pathname} t={t} />
+              </nav>
+            </SheetContent>
+          </Sheet>
+          <div className="w-full flex-1">
+            <div className="flex items-center">
+              <h2 className="text-lg font-medium">Detalhes do Paciente</h2>
+            </div>
           </div>
-        </aside>
+          <ThemeToggle />
+        </header>
 
-        {/* ==================== Conteúdo ==================== */}
-        <section className="space-y-6">
-          {/* -------- Dados pessoais -------- */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>Dados pessoais</CardTitle>
-                <CardDescription>Informações básicas do paciente</CardDescription>
-              </div>
-              <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm"><Pencil className="mr-2 h-4 w-4" /> Editar</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Editar informações</DialogTitle>
-                    <DialogDescription>Atualize os dados abaixo e salve.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <Label>Nome</Label>
-                        <Input value={editData.name} onChange={(e)=>setEditData(s=>({...s, name:e.target.value}))} />
-                      </div>
-                      <div>
-                        <Label>E-mail (não editável)</Label>
-                        <Input value={patient?.email || ""} readOnly className="bg-muted/50" />
-                      </div>
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input
-                          value={editData.telefone}
-                          onChange={(e)=>setEditData(s=>({...s, telefone: e.target.value}))}
-                          onBlur={(e)=>setEditData(s=>({...s, telefone: formatTelefone(s.telefone)}))}
-                        />
-                      </div>
-                      <div>
-                        <Label>Data de nascimento</Label>
-                        <Input
-                          type="date"
-                          value={editData.birthdate}
-                          onChange={(e)=>setEditData(s=>({...s, birthdate: e.target.value}))}
-                        />
-                      </div>
-                      <div>
-                        <Label>Valor consulta padrão (R$)</Label>
-                        <Input
-                          inputMode="decimal"
-                          value={editData.valorConsulta}
-                          onChange={(e)=>setEditData(s=>({...s, valorConsulta: e.target.value}))}
-                          placeholder="Ex: 150,00"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={()=>setEditInfoOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleSaveInfo}>Salvar</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <Label>Nome</Label>
-                <div className="mt-1 text-sm">{patient?.nome || "-"}</div>
-              </div>
-              <div>
-                <Label>E-mail</Label>
-                <div className="mt-1 text-sm">{patient?.email || "-"}</div>
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <div className="mt-1 text-sm">{patient?.telefone || "-"}</div>
-              </div>
-              <div>
-                <Label>Nascimento</Label>
-                <div className="mt-1 text-sm">{patient?.birthdate ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</div>
-              </div>
-              <div>
-                <Label>Valor consulta padrão</Label>
-                <div className="mt-1 text-sm">{patient?.valorConsulta || "-"}</div>
-              </div>
-              <div>
-                <Label>Status</Label>
-                <div className="mt-1 text-sm">{isActive ? "Ativo" : "Inativo"}</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* -------- Abas: Arquivos do Paciente -------- */}
-          <div id="arquivos" />
-          <Card>
-            <CardHeader>
-              <CardTitle>Arquivos do paciente</CardTitle>
-              <CardDescription>Envie dietas, fotos e materiais individuais.</CardDescription>
-            </CardHeader>
-
-            <CardContent>
-              <Tabs defaultValue="dietas" className="w-full">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="dietas">Dietas</TabsTrigger>
-                  <TabsTrigger value="fotos">Fotos</TabsTrigger>
-                  <TabsTrigger value="materiais">Materiais Individuais</TabsTrigger>
-                </TabsList>
-
-                {/* ======== Dietas ======== */}
-                <TabsContent value="dietas" className="space-y-6">
-                  <form onSubmit={handleReplaceDiet} className="grid gap-3 md:grid-cols-3">
-                    <div className="md:col-span-2">
-                      <Label>Selecionar PDF da dieta</Label>
-                      <Input type="file" accept="application/pdf" onChange={(e)=> setSelectedPDF(e.target.files?.[0] ?? null)} />
-                    </div>
-                    <div>
-                      <Label>Nome da dieta</Label>
-                      <Input value={nomeDieta} onChange={(e)=> setNomeDieta(e.target.value)} placeholder="Ex: Dieta Semana 32" />
-                    </div>
-                    <div className="md:col-span-3 flex justify-end">
-                      <Button type="submit" disabled={isSubmittingDiet} className={submitButtonColorClass}>
-                        {isSubmittingDiet ? "Enviando..." : submitButtonText}
-                      </Button>
-                    </div>
-                  </form>
-
-                  <div>
-                    <h4 className="mb-2 font-medium">Dietas enviadas</h4>
-                    {!(patient?.dietas?.length) ? (
-                      <div className="text-sm text-muted-foreground">Nenhuma dieta enviada.</div>
-                    ) : (
-                      <div className="grid gap-3">
-                        {(patient.dietas || []).map((d:any, idx:number)=>(
-                          <div key={d.url ?? idx} className="flex items-center justify-between rounded-lg border p-3">
-                            <div className="min-w-0">
-                              <div className="truncate font-medium">{d.nomeDieta || d.nome}</div>
-                              <div className="text-xs text-muted-foreground">Enviado em {d.dataEnvio}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Link href={d.url} target="_blank" className="underline text-sm">Abrir</Link>
-                              <Button variant="destructive" size="sm" onClick={()=>handleDeleteDiet(d)}>
-                                <Trash className="mr-1 h-4 w-4" /> Excluir
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                {/* ======== Fotos ======== */}
-                <TabsContent value="fotos" className="space-y-6">
-                  <form onSubmit={handleUploadPhotos} className="grid gap-3 md:grid-cols-3">
-                    <div>
-                      <Label>Tipo de foto</Label>
-                      <select
-                        className="w-full rounded-md border bg-background p-2"
-                        value={tipoFoto}
-                        onChange={(e)=> setTipoFoto(e.target.value)}
-                      >
-                        <option>Foto Frontal</option>
-                        <option>Foto Lateral</option>
-                        <option>Foto Costas</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label>Selecionar imagem</Label>
-                      <Input type="file" accept="image/*" onChange={handlePhotoChange} />
-                    </div>
-                    <div className="md:col-span-3 flex justify-end">
-                      <Button type="submit">Enviar foto</Button>
-                    </div>
-                  </form>
-
-                  <div>
-                    <h4 className="mb-2 font-medium">Galeria</h4>
-                    {!(patient?.fotos?.length) ? (
-                      <div className="text-sm text-muted-foreground">Nenhuma foto enviada.</div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {(patient.fotos || []).map((f:any, idx:number)=>(
-                          <div key={f.url ?? idx} className="rounded-lg border p-2">
-                            <div className="mb-2 aspect-square overflow-hidden rounded-md bg-muted">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={f.url} alt={f.tipo || "Foto"} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="truncate text-sm font-medium">{f.tipo || "Foto"}</div>
-                            <div className="text-xs text-muted-foreground">Enviado em {f.dataEnvio}</div>
-                            <div className="mt-2 flex justify-between">
-                              <Link href={f.url} target="_blank" className="underline text-xs">Abrir</Link>
-                              <Button variant="destructive" size="sm" onClick={()=>handleDeletePhoto(f)}>
-                                <Trash className="mr-1 h-3 w-3" /> Excluir
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                {/* ======== Materiais Individuais ======== */}
-                <TabsContent value="materiais" className="space-y-6">
-                  <form onSubmit={handleUploadIndividualMaterial} className="grid gap-3 md:grid-cols-3">
-                    <div className="md:col-span-2">
-                      <Label>Selecionar PDF</Label>
-                      <Input type="file" accept="application/pdf" onChange={(e)=> setSelectedIndividualPDF(e.target.files?.[0] ?? null)} />
-                    </div>
-                    <div>
-                      <Label>Nome do material</Label>
-                      <Input value={nomeMaterialIndividual} onChange={(e)=> setNomeMaterialIndividual(e.target.value)} placeholder="Ex: Guia de Proteínas" />
-                    </div>
-                    <div className="md:col-span-3 flex justify-end">
-                      <Button type="submit" disabled={isSubmittingIndividualMaterial} className={submitIndividualMaterialColorClass}>
-                        {isSubmittingIndividualMaterial ? "Enviando..." : submitIndividualMaterialText}
-                      </Button>
-                    </div>
-                  </form>
-
-                  <div>
-                    <h4 className="mb-2 font-medium">Materiais enviados</h4>
-                    {!(patient?.materiaisIndividuais?.length) ? (
-                      <div className="text-sm text-muted-foreground">Nenhum material enviado.</div>
-                    ) : (
-                      <div className="grid gap-3">
-                        {(patient.materiaisIndividuais || []).map((m:any, idx:number)=>(
-                          <div key={m.url ?? idx} className="flex items-center justify-between rounded-lg border p-3">
-                            <div className="min-w-0">
-                              <div className="truncate font-medium">{m.nomeMaterial || m.nome}</div>
-                              <div className="text-xs text-muted-foreground">Enviado em {m.dataEnvio}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Link href={m.url} target="_blank" className="underline text-sm">Abrir</Link>
-                              <Button variant="destructive" size="sm" onClick={()=>handleDeleteIndividualMaterial(m)}>
-                                <Trash className="mr-1 h-4 w-4" /> Excluir
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* ======== A partir daqui entram as MÉTRICAS (Partes 2/3) ======== */}
-          <div id="metricas" />
-          {/* ==================== Métricas ==================== */}
-
-          {/* useEffect adicional que realiza todos os cálculos automáticos */}
-          {/* (Pode coexistir com o placeholder da Parte 1; este aqui faz o trabalho) */}
-          {(() => {
-            // wrapper para permitir inserir hooks aqui sem quebrar a ordem
-            // (não executa nada em render; os hooks reais ficam abaixo)
-            return null
-          })()}
-
-          {/* Hooks reais de cálculo */}
-          {/*
-            Observação: manter dependências alinhadas com os campos editáveis.
-          */}
-          {/* eslint-disable react-hooks/rules-of-hooks */}
-          {
-            (() => {
-              // usamos um IIFE para manter a organização sem mover o código da Parte 1
-              // (os hooks abaixo executam normalmente)
-              // eslint-disable-next-line react-hooks/rules-of-hooks
-              useEffect(() => {
-                const peso = parseNumber(pesoNovo)
-                const altura = parseNumber(alturaNova)
-                const cintura = parseNumber(cinturaNovo)
-                const quadril = parseNumber(quadrilNovo)
-                const braco = parseNumber(bracoNovo)
-                const gorduraPercentualInput = parseNumber(gorduraPercentualNovoInput)
-
-                const calculatedIMC = calculateIMC(peso, altura)
-                setImcNovo(calculatedIMC > 0 ? calculatedIMC.toFixed(2).replace(".", ",") : "")
-                setClassificacaoImcNovo(classifyIMC(calculatedIMC))
-
-                const calculatedRCQ = calculateRCQ(cintura, quadril)
-                setRcqNovo(calculatedRCQ > 0 ? calculatedRCQ.toFixed(2).replace(".", ",") : "")
-                setRiscoRcqNovo(classifyRCQ(calculatedRCQ, patient?.sexo))
-
-                const calculatedCMB = calculateCMB(braco)
-                setCmbNovo(calculatedCMB > 0 ? calculatedCMB.toFixed(2).replace(".", ",") : "")
-                setClassificacaoCmbNovo(classifyCMB(calculatedCMB))
-
-                setClassificacaoGorduraNovo(classifyGordura(gorduraPercentualInput))
-
-                const calculatedMassaGordura = calculateMassaGordura(gorduraPercentualInput, peso)
-                setMassaGorduraNovo(calculatedMassaGordura > 0 ? calculatedMassaGordura.toFixed(2).replace(".", ",") : "")
-
-                const calculatedMassaLivreGordura = calculateMassaLivreGordura(peso, calculatedMassaGordura)
-                setMassaLivreGorduraNovo(calculatedMassaLivreGordura > 0 ? calculatedMassaLivreGordura.toFixed(2).replace(".", ",") : "")
-
-                const calculatedMassaResidual = calculateMassaResidual(peso)
-                setMassaResidualNovo(calculatedMassaResidual > 0 ? calculatedMassaResidual.toFixed(2).replace(".", ",") : "")
-
-                // % massa gorda / % massa livre (100%)
-                let percMG = 0, percMLG = 0
-                if (peso > 0) {
-                  percMG = (calculatedMassaGordura / peso) * 100
-                  percMLG = Math.max(0, 100 - percMG)
-                }
-                setMassaGorduraPercentNovo(percMG > 0 ? percMG.toFixed(1).replace(".", ",") : "")
-                setMassaLivreGorduraPercentNovo(percMLG > 0 ? percMLG.toFixed(1).replace(".", ",") : "")
-
-                // === Dobras → BD e %G ===
-                const idade = ((): number => {
-                  const a = patient?.birthdate ? getAgeFromBirthdate(patient.birthdate) : null
-                  return a ?? 0
-                })()
-                const sexo = patient?.sexo || "feminino"
-                const d = {
-                  tricipital: (skinfolds.tricipital || "").replace(",", "."),
-                  bicipital: (skinfolds.bicipital || "").replace(",", "."),
-                  abdominal: (skinfolds.abdominal || "").replace(",", "."),
-                  subescapular: (skinfolds.subescapular || "").replace(",", "."),
-                  axilarMedia: (skinfolds.axilarMedia || "").replace(",", "."),
-                  coxa: (skinfolds.coxa || "").replace(",", "."),
-                  toracica: (skinfolds.toracica || "").replace(",", "."),
-                  suprailiaca: (skinfolds.suprailiaca || "").replace(",", "."),
-                  panturrilha: (skinfolds.panturrilha || "").replace(",", "."),
-                  supraespinhal: (skinfolds.supraespinhal || "").replace(",", "."),
-                }
-                // converter para número seguro
-                const dn = {
-                  tricipital: Number(d.tricipital) || 0,
-                  bicipital: Number(d.bicipital) || 0,
-                  abdominal: Number(d.abdominal) || 0,
-                  subescapular: Number(d.subescapular) || 0,
-                  axilarMedia: Number(d.axilarMedia) || 0,
-                  coxa: Number(d.coxa) || 0,
-                  toracica: Number(d.toracica) || 0,
-                  suprailiaca: Number(d.suprailiaca) || 0,
-                  panturrilha: Number(d.panturrilha) || 0,
-                  supraespinhal: Number(d.supraespinhal) || 0,
-                }
-
-                let bd = 0, fat = 0
-                switch (formulaDobras) {
-                  case "POLLOCK3": {
-                    const sum3 = (sexo.toLowerCase().startsWith("m"))
-                      ? (dn.toracica + dn.abdominal + dn.coxa)
-                      : (dn.tricipital + dn.suprailiaca + dn.coxa)
-                    if (sum3 > 0 && idade > 0) {
-                      bd = bdPollock3(sum3, idade, sexo)
-                      fat = toPercentFatFromBD(bd, metodoPercentual)
-                    }
-                    break
-                  }
-                  case "POLLOCK7": {
-                    const sum7 = dn.toracica + dn.axilarMedia + dn.tricipital + dn.subescapular + dn.abdominal + dn.suprailiaca + dn.coxa
-                    if (sum7 > 0 && idade > 0) {
-                      bd = bdPollock7(sum7, idade, sexo)
-                      fat = toPercentFatFromBD(bd, metodoPercentual)
-                    }
-                    break
-                  }
-                  case "DURNIN": {
-                    const sum4 = dn.tricipital + dn.bicipital + dn.subescapular + dn.suprailiaca
-                    if (sum4 > 0 && idade > 0) {
-                      bd = bdDurnin(sum4, idade, sexo)
-                      fat = toPercentFatFromBD(bd, metodoPercentual)
-                    }
-                    break
-                  }
-                  case "FAULKNER": {
-                    const sum4 = dn.tricipital + dn.subescapular + dn.suprailiaca + dn.abdominal
-                    if (sum4 > 0) {
-                      fat = percentFaulkner(sum4)
-                      bd = fat ? 495 / (fat + 450) : 0
-                    }
-                    break
-                  }
-                  case "PETROSKI":
-                  case "GUEDES":
-                  case "NONE":
-                  default:
-                    // não calculado
-                    break
-                }
-                setDensidadeCorporalCalc(bd ? bd.toFixed(3).replace(".", ",") : "")
-                setGorduraPercentualPorDobras(fat ? fat.toFixed(1).replace(".", ",") : "")
-
-              }, [
-                pesoNovo, alturaNova, cinturaNovo, quadrilNovo, bracoNovo, gorduraPercentualNovoInput,
-                patient?.sexo, patient?.birthdate, skinfolds, formulaDobras, metodoPercentual
-              ])
-              return null
-            })()
-          }
-          {/* eslint-enable react-hooks/rules-of-hooks */}
-
-          {/* --------- Card: Métricas básicas --------- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Métricas básicas</CardTitle>
-              <CardDescription>Preencha e os cálculos aparecem automaticamente.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <div>
-                  <Label>Data da medição</Label>
-                  <Input
-                    type="date"
-                    value={dataNovaMetrica || ""}
-                    onChange={(e) => setDataNovaMetrica(e.target.value)}
-                    placeholder={todayISO()}
-                  />
-                </div>
-                <div>
-                  <Label>Peso (kg)</Label>
-                  <Input value={pesoNovo} onChange={(e)=>setPesoNovo(e.target.value)} placeholder="Ex: 72,4" />
-                </div>
-                <div>
-                  <Label>Altura (cm)</Label>
-                  <Input value={alturaNova} onChange={(e)=>setAlturaNova(e.target.value)} placeholder="Ex: 172" />
-                </div>
-                <div>
-                  <Label>Cintura (cm)</Label>
-                  <Input value={cinturaNovo} onChange={(e)=>setCinturaNovo(e.target.value)} placeholder="Ex: 78" />
-                </div>
-                <div>
-                  <Label>Quadril (cm)</Label>
-                  <Input value={quadrilNovo} onChange={(e)=>setQuadrilNovo(e.target.value)} placeholder="Ex: 96" />
-                </div>
-                <div>
-                  <Label>Circ. braço (cm)</Label>
-                  <Input value={bracoNovo} onChange={(e)=>setBracoNovo(e.target.value)} placeholder="Ex: 29" />
-                </div>
-              </div>
-
-              {/* Calculados resumidos */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <div>
-                  <Label>IMC</Label>
-                  <Input value={imcNovo} readOnly />
-                </div>
-                <div>
-                  <Label>Class. IMC</Label>
-                  <Input value={classificacaoImcNovo} readOnly />
-                </div>
-                <div>
-                  <Label>RCQ</Label>
-                  <Input value={rcqNovo} readOnly />
-                </div>
-                <div>
-                  <Label>Risco RCQ</Label>
-                  <Input value={riscoRcqNovo} readOnly />
-                </div>
-                <div>
-                  <Label>CMB</Label>
-                  <Input value={cmbNovo} readOnly />
-                </div>
-                <div>
-                  <Label>Class. CMB</Label>
-                  <Input value={classificacaoCmbNovo} readOnly />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* --------- Card: Dobras cutâneas --------- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Dobras cutâneas</CardTitle>
-              <CardDescription>Mostra apenas as dobras do protocolo selecionado.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div>
-                  <Label>Protocolo</Label>
-                  <select
-                    className="w-full rounded-md border bg-background p-2"
-                    value={formulaDobras}
-                    onChange={(e)=>setFormulaDobras(e.target.value as any)}
-                  >
-                    <option value="NONE">—</option>
-                    <option value="POLLOCK3">Pollock 3</option>
-                    <option value="POLLOCK7">Pollock 7</option>
-                    <option value="DURNIN">Durnin & Womersley</option>
-                    <option value="FAULKNER">Faulkner</option>
-                    <option value="PETROSKI">Petroski</option>
-                    <option value="GUEDES">Guedes</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>Método %G</Label>
-                  <select
-                    className="w-full rounded-md border bg-background p-2"
-                    value={metodoPercentual}
-                    onChange={(e)=>setMetodoPercentual(e.target.value as any)}
-                  >
-                    <option value="SIRI">Siri</option>
-                    <option value="BROZEK">Brozek</option>
-                  </select>
-                </div>
-                <div>
-                  <Label>% Gordura (manual)</Label>
-                  <Input value={gorduraPercentualNovoInput} onChange={(e)=>setGorduraPercentualNovoInput(e.target.value)} placeholder="opcional" />
-                </div>
-                <div>
-                  <Label>Densidade (manual)</Label>
-                  <Input value={densidadeCorporalNovoInput} onChange={(e)=>setDensidadeCorporalNovoInput(e.target.value)} placeholder="opcional" />
-                </div>
-              </div>
-
-              {/* Campos de dobras conforme protocolo */}
-              {skinfoldFieldsForProtocol.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {skinfoldFieldsForProtocol.map((k) => (
-                    <div key={k}>
-                      <Label className="capitalize">{k}</Label>
-                      <Input
-                        value={skinfolds[k]}
-                        onChange={(e)=>setSkinfolds(s => ({ ...s, [k]: e.target.value }))}
-                        placeholder="mm"
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">Selecione um protocolo acima.</div>
-              )}
-
-              {/* Resultados do cálculo por dobras (se houver) */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                  <Label>Densidade (calc.)</Label>
-                  <Input value={densidadeCorporalCalc} readOnly />
-                </div>
-                <div>
-                  <Label>% Gordura (calc.)</Label>
-                  <Input value={gorduraPercentualPorDobras} readOnly />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* --------- Card: Resultados --------- */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Resultados</CardTitle>
-              <CardDescription>Percentuais salvos e usados no gráfico.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div>
-                  <Label>Massa gorda (kg)</Label>
-                  <Input value={massaGorduraNovo} readOnly />
-                </div>
-                <div>
-                  <Label>Massa livre (kg)</Label>
-                  <Input value={massaLivreGorduraNovo} readOnly />
-                </div>
-                <div>
-                  <Label>Massa residual (kg)</Label>
-                  <Input value={massaResidualNovo} readOnly />
-                </div>
-                <div>
-                  <Label>% Massa gorda</Label>
-                  <Input value={massaGorduraPercentNovo} readOnly />
-                </div>
-                <div>
-                  <Label>% Massa livre</Label>
-                  <Input value={massaLivreGorduraPercentNovo} readOnly />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={async () => {
-                  // salvarNovaMetrica — implementada aqui em linha para manter tudo nesta parte
-                  if (!user?.email || !patient) { toast({ title: "Erro", description: "Usuário não autenticado ou paciente indisponível." }); return }
-
-                  const dataFinal = dataNovaMetrica && !isNaN(new Date(dataNovaMetrica).getTime())
-                    ? dataNovaMetrica
-                    : todayISO()
-
-                  const pesoNum = parseNumber(pesoNovo)
-                  const alturaNum = parseNumber(alturaNova)
-                  const cinturaNum = parseNumber(cinturaNovo)
-                  const quadrilNum = parseNumber(quadrilNovo)
-                  const bracoNum = parseNumber(bracoNovo)
-
-                  const mgKg = massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : 0
-                  const mlgKg = massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : 0
-                  const mgPerc = (pesoNum > 0 && mgKg > 0) ? (mgKg / pesoNum) * 100 : 0
-                  const mlgPerc = (pesoNum > 0 && mlgKg >= 0) ? Math.max(0, 100 - mgPerc) : 0
-
-                  const novaMetrica: MetricaEntry = {
-                    data: dataFinal,
-                    peso: pesoNum,
-                    altura: alturaNum,
-                    cintura: cinturaNum,
-                    quadril: quadrilNum,
-                    braco: bracoNum,
-
-                    dobras: {
-                      tricipital: Number((skinfolds.tricipital || "0").replace(",", ".")) || 0,
-                      bicipital: Number((skinfolds.bicipital || "0").replace(",", ".")) || 0,
-                      abdominal: Number((skinfolds.abdominal || "0").replace(",", ".")) || 0,
-                      subescapular: Number((skinfolds.subescapular || "0").replace(",", ".")) || 0,
-                      axilarMedia: Number((skinfolds.axilarMedia || "0").replace(",", ".")) || 0,
-                      coxa: Number((skinfolds.coxa || "0").replace(",", ".")) || 0,
-                      toracica: Number((skinfolds.toracica || "0").replace(",", ".")) || 0,
-                      suprailiaca: Number((skinfolds.suprailiaca || "0").replace(",", ".")) || 0,
-                      panturrilha: Number((skinfolds.panturrilha || "0").replace(",", ".")) || 0,
-                      supraespinhal: Number((skinfolds.supraespinhal || "0").replace(",", ".")) || 0,
-                      formula: formulaDobras,
-                      metodoPercentual,
-                    },
-
-                    somatorioDobras: [
-                      Number((skinfolds.tricipital || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.bicipital || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.abdominal || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.subescapular || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.axilarMedia || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.coxa || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.toracica || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.suprailiaca || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.panturrilha || "0").replace(",", ".")) || 0,
-                      Number((skinfolds.supraespinhal || "0").replace(",", ".")) || 0,
-                    ].filter(v=>v>0).reduce((a,b)=>a+b,0),
-
-                    // calculados
-                    imc: (() => {
-                      const v = calculateIMC(pesoNum, alturaNum)
-                      return v ? Number(v.toFixed(2)) : undefined
-                    })(),
-                    classificacaoImc: (() => {
-                      const v = calculateIMC(pesoNum, alturaNum)
-                      return v ? classifyIMC(v) : undefined
-                    })(),
-                    rcq: (() => {
-                      const v = calculateRCQ(cinturaNum, quadrilNum)
-                      return v ? Number(v.toFixed(2)) : undefined
-                    })(),
-                    riscoRcq: (() => {
-                      const v = calculateRCQ(cinturaNum, quadrilNum)
-                      return v ? classifyRCQ(v, patient?.sexo) : undefined
-                    })(),
-                    cmb: (() => {
-                      const v = calculateCMB(bracoNum)
-                      return v ? Number(v.toFixed(2)) : undefined
-                    })(),
-                    classificacaoCmb: (() => {
-                      const v = calculateCMB(bracoNum)
-                      return v ? classifyCMB(v) : undefined
-                    })(),
-
-                    gorduraPercentual: (() => {
-                      const manual = parseNumber(gorduraPercentualNovoInput)
-                      if (manual > 0) return Number(manual.toFixed(1))
-                      const porDobras = (gorduraPercentualPorDobras || "").replace(",", ".")
-                      const v = Number(porDobras)
-                      return v > 0 ? Number(v.toFixed(1)) : undefined
-                    })(),
-                    classificacaoGordura: (() => {
-                      const manual = parseNumber(gorduraPercentualNovoInput)
-                      if (manual > 0) return classifyGordura(manual)
-                      const porDobras = Number((gorduraPercentualPorDobras || "").replace(",", "."))
-                      return porDobras > 0 ? classifyGordura(porDobras) : undefined
-                    })(),
-
-                    massaGordura: mgKg ? Number(mgKg.toFixed(2)) : undefined,
-                    massaResidual: (pesoNum>0) ? Number(calculateMassaResidual(pesoNum).toFixed(2)) : undefined,
-                    massaLivreGordura: mlgKg ? Number(mlgKg.toFixed(2)) : undefined,
-                    massaGorduraPercent: mgPerc ? Number(mgPerc.toFixed(1)) : undefined,
-                    massaLivreGorduraPercent: mgPerc ? Number((100 - mgPerc).toFixed(1)) : (mlgPerc ? Number(mlgPerc.toFixed(1)) : undefined),
-
-                    densidadeCorporal: (() => {
-                      const manual = parseNumber(densidadeCorporalNovoInput)
-                      if (manual > 0) return Number(manual.toFixed(3))
-                      const bd = Number((densidadeCorporalCalc || "").replace(",", "."))
-                      return bd > 0 ? Number(bd.toFixed(3)) : undefined
-                    })(),
-                  }
-
-                  try {
-                    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
-                    const snap = await getDoc(refp)
-                    const hist: MetricaEntry[] = (snap.exists() ? (snap.data().historicoMetricas || []) : []) as MetricaEntry[]
-
-                    // substitui a medição se já houver para a mesma data
-                    const filtrado = hist.filter(m => m.data !== dataFinal)
-                    const atualizado = [...filtrado, novaMetrica].sort(
-                      (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
-                    )
-
-                    await updateDoc(refp, { historicoMetricas: atualizado })
-
-                    setPatient(prev => prev ? { ...prev, historicoMetricas: atualizado } : prev)
-                    setMetricas(atualizado)
-                    // janela de 5 últimas será ajustada na Parte 3 (carrossel)
-
-                    // limpar inputs
-                    setDataNovaMetrica("")
-                    setPesoNovo(""); setAlturaNova(""); setCinturaNovo(""); setQuadrilNovo(""); setBracoNovo("")
-                    setGorduraPercentualNovoInput(""); setSomatorioDobrasNovo(""); setDensidadeCorporalNovoInput("")
-                    setSkinfolds({
-                      tricipital: "", bicipital: "", abdominal: "", subescapular: "",
-                      axilarMedia: "", coxa: "", toracica: "", suprailiaca: "",
-                      panturrilha: "", supraespinhal: "",
-                    })
-
-                    toast({ title: "Medição salva", description: "Histórico atualizado com sucesso." })
-                  } catch (e) {
-                    console.error(e)
-                    toast({ title: "Erro ao salvar medição", variant: "destructive" })
-                  }
-                }}>
-                  Salvar medição
+        {/* Main */}
+        <main className="flex-1 p-4 md:p-6">
+          <div className="max-w-4xl mx-auto w-full">
+            {/* Top actions: voltar / ativo-inativo / excluir */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <Button variant="outline" size="icon" asChild>
+                  <Link href="/pacientes">
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Voltar</span>
+                  </Link>
                 </Button>
+
+                <div className="flex items-center gap-2">
+                  <Switch id="patient-status" checked={isActive} onCheckedChange={togglePatientStatus} />
+                  <Label htmlFor="patient-status">{isActive ? "Paciente Ativo" : "Paciente Inativo"}</Label>
+                </div>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive hover:bg-muted"
+                      title="Excluir paciente"
+                    >
+                      <Trash className="h-5 w-5" />
+                      <span className="sr-only">Excluir paciente</span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados
+                        do Firestore.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* (Histórico + gráfico entram na PARTE 3/3) */}
-          {/* ==================== Histórico (carrossel 5 colunas) ==================== */}
-          {/*
-            Controles do carrossel baseados no estado já criado (histStart, HIST_WINDOW, metricas).
-            canPrev/canNext são computados aqui e usamos janelaMetricas como o "slice" visível.
-          */}
-          {(() => {
-            return null
-          })()}
+            {/* Cartão: Informações Pessoais */}
+            <Card className="mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Informações Pessoais</CardTitle>
+                </div>
+                <Button onClick={() => setEditInfoOpen(true)} className="bg-indigo-600 text-white hover:bg-indigo-700">
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Nome</p>
+                  <p>{patient?.nome || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Email</p>
+                  <p>{patient?.email || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+                  <p>{patient?.telefone ? formatTelefone(patient.telefone) : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
+                  <p>
+                    {patient?.birthdate
+                      ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR")
+                      : "-"}
+                  </p>
+                </div>
+                {patient?.senhaProvisoria && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+                      Senha Provisória
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSenha((prev) => !prev)}
+                        className="text-indigo-600 text-xs"
+                      >
+                        {mostrarSenha ? "Ocultar" : "Mostrar"}
+                      </button>
+                    </p>
+                    <p className="font-mono text-sm">{mostrarSenha ? patient.senhaProvisoria : "••••••••"}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* eslint-disable react-hooks/rules-of-hooks */}
-          {
-            (() => {
-              // helpers derivados
-              const canPrev = histStart > 0
-              const canNext = histStart + HIST_WINDOW < metricas.length
-              const janelaMetricas = useMemo(() => {
-                return metricas.slice(histStart, histStart + HIST_WINDOW)
-              }, [metricas, histStart])
+            {/* Modal Editar Informações */}
+            <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Informações Pessoais</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid gap-1">
+                    <Label>Nome</Label>
+                    <Input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Email</Label>
+                    <Input value={patient?.email || ""} disabled className="opacity-60 cursor-not-allowed" />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Telefone</Label>
+                    <Input
+                      value={editData.telefone}
+                      onChange={(e) => {
+                        const onlyNumbers = e.target.value.replace(/\D/g, "").slice(0, 11)
+                        const match = onlyNumbers.match(/^(\d{2})(\d{5})(\d{4})$/)
+                        const formatted = match ? `(${match[1]}) ${match[2]}-${match[3]}` : onlyNumbers
+                        setEditData({ ...editData, telefone: formatted })
+                      }}
+                      placeholder="(99) 99999-9999"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Data de Nascimento</Label>
+                    <Input type="date" value={editData.birthdate} onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })} />
+                  </div>
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      setIsSaving(true)
+                      await handleSaveInfo()
+                      setIsSaving(false)
+                    }}
+                    disabled={isSaving}
+                    className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  >
+                    {isSaving ? "Salvando..." : "Salvar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-              // dados do gráfico (% massa gorda vs % livre)
-              const chartData = useMemo(() => {
-                return metricas.map((m: any) => {
-                  const d = new Date((m.data || "") + "T12:00:00")
-                  const label = isNaN(d.getTime())
-                    ? (m.data || "")
-                    : `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`
-                  const mgpRaw = (typeof m.massaGorduraPercent === "number" ? m.massaGorduraPercent : undefined)
-                    ?? (typeof m.gorduraPercentual === "number" ? m.gorduraPercentual : undefined)
-                    ?? 0
-                  const mgp = Number(Number(mgpRaw).toFixed(1))
-                  const mlgp = Number((100 - mgp).toFixed(1))
-                  return { data: label, "Massa gorda (%)": mgp, "Massa livre (%)": mlgp }
-                })
-              }, [metricas])
+            {/* ===== Tabs: Métricas / Dietas / Fotos / Material Individual ===== */}
+            <Tabs defaultValue="metricas" className="w-full mt-6">
+              <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
+                <TabsTrigger value="metricas">Métricas</TabsTrigger>
+                <TabsTrigger value="dietas">Dietas</TabsTrigger>
+                <TabsTrigger value="fotos">Fotos</TabsTrigger>
+                <TabsTrigger value="material-individual">Material Individual</TabsTrigger>
+              </TabsList>
 
-              return (
-                <>
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle>Histórico de medições</CardTitle>
-                        <CardDescription>Ordem do mais antigo → mais novo. Use as setas para navegar.</CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={!canPrev}
-                          onClick={() => setHistStart((s) => (s > 0 ? s - 1 : s))}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={!canNext}
-                          onClick={() =>
-                            setHistStart((s) => (s + HIST_WINDOW < metricas.length ? s + 1 : s))
-                          }
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
+              {/* >>> O conteúdo das abas vem na PARTE 2/3 <<< */}
+              {/* ====================== ABA: DIETAS ====================== */}
+              <TabsContent value="dietas" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Nova Dieta</CardTitle>
+                    <CardDescription>Faça upload de dietas em PDF para o paciente</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleReplaceDiet}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        <div className="grid gap-2">
+                          <Label>Nome da Dieta</Label>
+                          <Input
+                            placeholder="Ex: Dieta de Emagrecimento - Agosto 2025"
+                            value={nomeDieta}
+                            onChange={(e) => setNomeDieta(e.target.value)}
+                          />
+                          {erroNomeDieta && (
+                            <p className="text-sm text-red-600 mt-1">
+                              Por favor, insira o nome da dieta antes de enviar.
+                            </p>
+                          )}
+                        </div>
 
-                    <CardContent className="overflow-x-auto">
-                      {janelaMetricas.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Sem medições ainda.</div>
-                      ) : (
-                        <div className="min-w-[720px]">
-                          {/* Cabeçalho de datas */}
-                          <div className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 border-b pb-2 text-xs font-medium">
-                            <div className="text-muted-foreground">Métrica</div>
-                            {janelaMetricas.map((m: any) => (
-                              <div key={m.data} className="text-center">
-                                {new Date((m.data || "") + "T12:00:00").toLocaleDateString("pt-BR")}
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Linhas de métricas */}
-                          {[
-                            { k: "peso", label: "Peso (kg)", fmt: (v: any)=> (typeof v === "number" ? v.toFixed(1) : v) },
-                            { k: "imc", label: "IMC" },
-                            { k: "classificacaoImc", label: "Class. IMC" },
-                            { k: "rcq", label: "RCQ" },
-                            { k: "riscoRcq", label: "Risco RCQ" },
-                            { k: "cmb", label: "CMB" },
-                            { k: "classificacaoCmb", label: "Class. CMB" },
-                            { k: "gorduraPercentual", label: "% Gordura" },
-                            { k: "classificacaoGordura", label: "Class. Gordura" },
-                            { k: "massaGorduraPercent", label: "% Massa gorda" },
-                            { k: "massaLivreGorduraPercent", label: "% Massa livre" },
-                            { k: "densidadeCorporal", label: "Densidade" },
-                            { k: "somatorioDobras", label: "Σ Dobras (mm)" },
-                          ].map((row) => (
-                            <div
-                              key={row.k}
-                              className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 py-2 text-sm"
+                        <div className="grid gap-2">
+                          <Label>Arquivo PDF</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="pdf-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
                             >
-                              <div className="text-muted-foreground">{row.label}</div>
-                              {janelaMetricas.map((m: any) => {
-                                const raw: any = m[row.k as keyof typeof m]
-                                const val = typeof row.fmt === "function" ? row.fmt(raw) : raw
-                                return (
-                                  <div key={m.data + "-" + row.k} className="text-center">
-                                    {val ?? "-"}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          ))}
-
-                          {/* Ações por medição */}
-                          <div className="grid grid-cols-[160px_repeat(5,minmax(120px,1fr))] gap-2 py-2 text-sm">
-                            <div className="text-muted-foreground">Ações</div>
-                            {janelaMetricas.map((m: any) => (
-                              <div key={m.data + "-actions"} className="flex items-center justify-center">
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={async () => {
-                                    if (!user?.email || !patient) return
-                                    try {
-                                      const historicoAtualizado = (patient.historicoMetricas || []).filter(
-                                        (x: any) => x.data !== m.data
-                                      )
-                                      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
-                                      await updateDoc(refPaciente, { historicoMetricas: historicoAtualizado })
-                                      // atualizar estado e manter janela coerente
-                                      setPatient((prev: any) =>
-                                        prev ? { ...prev, historicoMetricas: historicoAtualizado } : prev
-                                      )
-                                      setMetricas(historicoAtualizado)
-                                      // ajusta histStart se necessário
-                                      setHistStart((s) => Math.min(s, Math.max(0, historicoAtualizado.length - HIST_WINDOW)))
-                                      toast({ title: "Métrica excluída com sucesso" })
-                                    } catch (error) {
-                                      console.error("Erro ao excluir métrica:", error)
-                                      toast({ title: "Erro ao excluir métrica", variant: "destructive" })
-                                    }
-                                  }}
-                                >
-                                  <Trash className="mr-1 h-4 w-4" /> Excluir
-                                </Button>
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">
+                                  Clique para fazer upload ou arraste o arquivo
+                                </p>
+                                <p className="text-xs text-muted-foreground">PDF (Máx 10MB)</p>
                               </div>
-                            ))}
+                              <input
+                                id="pdf-upload"
+                                type="file"
+                                accept=".pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) setSelectedPDF(file)
+                                }}
+                              />
+                            </label>
                           </div>
                         </div>
-                      )}
+
+                        {selectedPDF && <p className="text-sm text-green-600">{selectedPDF.name}</p>}
+
+                        <div className="flex justify-center mt-4">
+                          <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                            <Button
+                              type="submit"
+                              className={`w-full text-white ${submitButtonColorClass}`}
+                              disabled={!selectedPDF || isSubmittingDiet}
+                            >
+                              {submitButtonText}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {patient?.dietas?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Dietas Enviadas</CardTitle>
+                      <CardDescription>Visualize as dietas já enviadas para este paciente.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4">
+                        {patient.dietas.map((dieta: any, index: number) => {
+                          const isUltima = index === patient.dietas.length - 1
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-4 rounded-lg border"
+                            >
+                              <div className="flex items-center gap-4">
+                                <FileText className="h-5 w-5 text-indigo-600" />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{dieta.nomeDieta || dieta.nome}</p>
+                                    {isUltima && (
+                                      <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 border border-green-200">
+                                        visível para o paciente
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Enviado em: {dieta.dataEnvio}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 items-center">
+                                <Link href={dieta.url} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="outline" size="sm">
+                                    Visualizar
+                                  </Button>
+                                </Link>
+
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-muted-foreground hover:text-red-600"
+                                      title="Excluir dieta"
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Excluir Dieta</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja excluir a dieta{" "}
+                                        <strong>{dieta.nomeDieta || dieta.nome}</strong>?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteDiet(dieta)}
+                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                      >
+                                        Excluir
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
+                )}
+              </TabsContent>
 
-                  {/* ==================== Gráfico empilhado (% massa) ==================== */}
-                  <Card>
+              {/* ====================== ABA: FOTOS ====================== */}
+              <TabsContent value="fotos" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Foto</CardTitle>
+                    <CardDescription>Envie 1 foto por vez, selecionando o tipo</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleUploadPhotos}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        {/* Seletor de Tipo */}
+                        <div className="grid gap-2">
+                          <Label>Tipo da Foto</Label>
+                          <select
+                            value={tipoFoto}
+                            onChange={(e) => setTipoFoto(e.target.value)}
+                            className="border rounded p-2 bg-background"
+                          >
+                            <option value="Foto Frontal">Frontal</option>
+                            <option value="Lateral Direita">Lateral Direita</option>
+                            <option value="Lateral Esquerda">Lateral Esquerda</option>
+                            <option value="Costas">Costas</option>
+                          </select>
+                        </div>
+
+                        {/* Upload de 1 Foto */}
+                        <div className="grid gap-2">
+                          <Label>Foto</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="photo-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">Clique para selecionar a foto</p>
+                                <p className="text-xs text-muted-foreground">JPG, PNG (Máx 5MB)</p>
+                              </div>
+                              <input
+                                id="photo-upload"
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) setSelectedPhoto(file)
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Botão Enviar */}
+                        <div className="flex justify-center mt-2">
+                          <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                            Enviar Foto
+                          </Button>
+                        </div>
+
+                        {/* Nome do arquivo selecionado */}
+                        {selectedPhoto && (
+                          <p className="text-sm text-green-600">{selectedPhoto.name}</p>
+                        )}
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {/* Histórico de Fotos */}
+                {patient?.fotos?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Histórico de Fotos</CardTitle>
+                      <CardDescription>Visualize e gerencie as fotos do paciente.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {patient.fotos.map((foto: any, index: number) => (
+                          <div key={index} className="border rounded-lg p-4 relative">
+                            <div className="flex justify-between items-center mb-2">
+                              <p className="text-sm font-medium">{foto.tipo}</p>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button
+                                    className="text-muted-foreground hover:text-red-600"
+                                    title="Excluir foto"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir Foto</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir esta foto?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeletePhoto(foto)}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Enviado em: {foto.dataEnvio}
+                            </p>
+                            {foto.url ? (
+                              <Image
+                                src={foto.url}
+                                alt={foto.tipo}
+                                width={600}
+                                height={600}
+                                className="rounded-md object-cover w-full h-auto"
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ============ ABA: MATERIAL INDIVIDUAL ============ */}
+              <TabsContent value="material-individual" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Material Individual</CardTitle>
+                    <CardDescription>Faça upload de PDFs específicos para este paciente.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleUploadIndividualMaterial}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        <div className="grid gap-2">
+                          <Label>Nome do Material</Label>
+                          <Input
+                            placeholder="Ex: Exercícios para Casa - Semana 1"
+                            value={nomeMaterialIndividual}
+                            onChange={(e) => setNomeMaterialIndividual(e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Arquivo PDF</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="individual-pdf-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">
+                                  Clique para fazer upload ou arraste o arquivo
+                                </p>
+                                <p className="text-xs text-muted-foreground">PDF (Máx 10MB)</p>
+                              </div>
+                              <input
+                                id="individual-pdf-upload"
+                                type="file"
+                                accept=".pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) setSelectedIndividualPDF(file)
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {selectedIndividualPDF && (
+                          <p className="text-sm text-green-600">{selectedIndividualPDF.name}</p>
+                        )}
+
+                        <div className="flex justify-center mt-4">
+                          <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                            <Button
+                              type="submit"
+                              className={`w-full text-white ${submitIndividualMaterialColorClass}`}
+                              disabled={!selectedIndividualPDF || isSubmittingIndividualMaterial}
+                            >
+                              {submitIndividualMaterialText}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {/* Lista de Materiais Enviados */}
+                {patient?.materiaisIndividuais?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Materiais Individuais Enviados</CardTitle>
+                      <CardDescription>
+                        Visualize e gerencie os materiais enviados para este paciente.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4">
+                        {patient.materiaisIndividuais.map((material: any, index: number) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-4 rounded-lg border"
+                          >
+                            <div className="flex items-center gap-4">
+                              <FileText className="h-5 w-5 text-indigo-600" />
+                              <div>
+                                <p className="font-medium">{material.nomeMaterial || material.nome}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Enviado em: {material.dataEnvio}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 items-center">
+                              <Link href={material.url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline" size="sm">
+                                  Visualizar
+                                </Button>
+                              </Link>
+
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-muted-foreground hover:text-red-600"
+                                    title="Excluir material"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir Material</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir o material{" "}
+                                      <strong>{material.nomeMaterial || material.nome}</strong>?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteIndividualMaterial(material)}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ====================== ABA: MÉTRICAS ====================== */}
+              {/* (Conteúdo completo da aba Métricas entra na PARTE 3/3) */}
+              {/* ====================== ABA: MÉTRICAS ====================== */}
+              <TabsContent value="metricas" className="mt-4">
+                {/* --------- Histórico (tabela por colunas de data) --------- */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>Histórico de Métricas</CardTitle>
+                    <CardDescription>Veja o histórico de medições do paciente</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {patient?.historicoMetricas?.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left border">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="text-left p-2">Métrica</th>
+                              {metricas.map((item: any, index: number) => (
+                                <th key={index} className="text-center p-2 font-semibold">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span>
+                                      {item.data && !isNaN(new Date(item.data).getTime())
+                                        ? new Date(item.data).toLocaleDateString("pt-BR")
+                                        : "Sem data"}
+                                    </span>
+
+                                    {/* Editar medição (ícone lápis) */}
+                                    <Dialog
+                                      open={!!metricaEditando && metricaEditando?.data === item.data}
+                                      onOpenChange={(open) => { if (!open) setMetricaEditando(null) }}
+                                    >
+                                      <DialogTrigger asChild>
+                                        <button
+                                          onClick={() => setMetricaEditando({ ...item })}
+                                          className="text-indigo-600 hover:text-indigo-700"
+                                          title="Editar esta medição"
+                                        >
+                                          <Pencil className="w-4 h-4" />
+                                        </button>
+                                      </DialogTrigger>
+
+                                      {metricaEditando && metricaEditando?.data === item.data && (
+                                        <DialogContent>
+                                          <DialogHeader>
+                                            <DialogTitle>Editar Métrica</DialogTitle>
+                                            <DialogDescription>
+                                              Atualize os valores da medição de{" "}
+                                              <strong>
+                                                {metricaEditando.data
+                                                  ? new Date(metricaEditando.data).toLocaleDateString("pt-BR")
+                                                  : "Data inválida"}
+                                              </strong>.
+                                            </DialogDescription>
+                                          </DialogHeader>
+
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto py-2 pr-2">
+                                            {[
+                                              { k: "peso", label: "Peso (kg)", type: "number" },
+                                              { k: "altura", label: "Altura (cm)", type: "number" },
+                                              { k: "cintura", label: "Cintura (cm)", type: "number" },
+                                              { k: "quadril", label: "Quadril (cm)", type: "number" },
+                                              { k: "braco", label: "Braço (cm)", type: "number" },
+                                              { k: "gorduraPercentual", label: "% Gordura", type: "number" },
+                                              { k: "somatorioDobras", label: "Somatório de Dobras (mm)", type: "number" },
+                                              { k: "densidadeCorporal", label: "Densidade Corporal", type: "number", step: "0.001" },
+                                            ].map((f) => (
+                                              <div key={f.k}>
+                                                <Label>{f.label}</Label>
+                                                <Input
+                                                  type={f.type as any}
+                                                  step={(f as any).step || "any"}
+                                                  defaultValue={metricaEditando[f.k] ?? ""}
+                                                  onChange={(e) =>
+                                                    setMetricaEditando((prev: any) => ({
+                                                      ...prev,
+                                                      [f.k]: e.target.value === "" ? undefined : Number(e.target.value),
+                                                    }))
+                                                  }
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          <DialogFooter className="mt-4">
+                                            <Button
+                                              disabled={isSaving}
+                                              onClick={async () => {
+                                                if (!user?.email) return
+                                                setIsSaving(true)
+                                                try {
+                                                  const ref = doc(db, "nutricionistas", user.email, "pacientes", id)
+                                                  const historicoAtualizado = patient.historicoMetricas.map((m: any) =>
+                                                    m.data === metricaEditando.data ? metricaEditando : m
+                                                  )
+                                                  await updateDoc(ref, { historicoMetricas: historicoAtualizado })
+                                                  setPatient((prev: any) => ({ ...prev, historicoMetricas: historicoAtualizado }))
+                                                  setMetricas(historicoAtualizado)
+                                                  toast({ title: "Métrica atualizada com sucesso" })
+                                                  setMetricaEditando(null)
+                                                } catch (e) {
+                                                  console.error(e)
+                                                  toast({ title: "Erro ao atualizar métrica", variant: "destructive" })
+                                                } finally {
+                                                  setIsSaving(false)
+                                                }
+                                              }}
+                                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            >
+                                              {isSaving ? "Salvando..." : "Salvar Alterações"}
+                                            </Button>
+                                          </DialogFooter>
+                                        </DialogContent>
+                                      )}
+                                    </Dialog>
+
+                                    {/* Excluir medição (ícone lixeira minimalista) */}
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <button
+                                          onClick={() => setMetricaParaExcluir(item)}
+                                          className="text-muted-foreground hover:text-red-600"
+                                          title="Excluir esta medição"
+                                        >
+                                          <Trash className="w-4 h-4" />
+                                        </button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Métrica</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja excluir a métrica do dia{" "}
+                                            <strong>{item.data}</strong>?
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={async () => {
+                                              if (!user?.email) return
+                                              try {
+                                                const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+                                                const historicoAtualizado = (patient.historicoMetricas || []).filter(
+                                                  (m: any) => m.data !== item.data
+                                                )
+                                                await updateDoc(refPaciente, { historicoMetricas: historicoAtualizado })
+                                                setPatient((prev: any) =>
+                                                  prev ? { ...prev, historicoMetricas: historicoAtualizado } : prev
+                                                )
+                                                setMetricas(historicoAtualizado)
+                                                toast({ title: "Métrica excluída com sucesso" })
+                                              } catch (e) {
+                                                console.error(e)
+                                                toast({ title: "Erro ao excluir métrica", variant: "destructive" })
+                                              } finally {
+                                                setMetricaParaExcluir(null)
+                                              }
+                                            }}
+                                            className="bg-red-600 hover:bg-red-700 text-white"
+                                          >
+                                            Excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {[
+                              { label: "Peso (kg)", key: "peso" },
+                              { label: "Altura (cm)", key: "altura" },
+                              { label: "Cintura (cm)", key: "cintura" },
+                              { label: "Quadril (cm)", key: "quadril" },
+                              { label: "Braço (cm)", key: "braco" },
+                              { label: "IMC (kg/m²)", key: "imc" },
+                              { label: "Classificação IMC", key: "classificacaoImc" },
+                              { label: "RCQ", key: "rcq" },
+                              { label: "Risco por RCQ", key: "riscoRcq" },
+                              { label: "CMB (cm)", key: "cmb" },
+                              { label: "Classificação CMB", key: "classificacaoCmb" },
+                              { label: "% Gordura", key: "gorduraPercentual" },
+                              { label: "% Massa gorda", key: "massaGorduraPercent" },
+                              { label: "% Massa livre", key: "massaLivreGorduraPercent" },
+                              { label: "Massa de Gordura (kg)", key: "massaGordura" },
+                              { label: "Massa Livre (kg)", key: "massaLivreGordura" },
+                              { label: "Massa Residual (kg)", key: "massaResidual" },
+                              { label: "Somatório de dobras (mm)", key: "somatorioDobras" },
+                              { label: "Densidade Corporal (g/mL)", key: "densidadeCorporal" },
+                            ].map(({ label, key }) => (
+                              <tr key={key} className="border-b hover:bg-muted/40">
+                                <td className="p-2 font-medium">{label}</td>
+                                {metricas.map((m: any, i: number) => (
+                                  <td key={i} className="p-2 text-center">
+                                    {m[key] === 0 || m[key] === "" || m[key] == null ? "-" : m[key]}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Nenhuma métrica registrada ainda.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* --------- Gráfico empilhado (cores roxo padrão) --------- */}
+                {metricas.length > 0 && (
+                  <Card className="mb-6">
                     <CardHeader>
                       <CardTitle>Composição corporal (%)</CardTitle>
-                      <CardDescription>Percentual de massa gorda e livre ao longo do tempo.</CardDescription>
+                      <CardDescription>Percentual de massa gorda e massa livre ao longo do tempo</CardDescription>
                     </CardHeader>
                     <CardContent style={{ width: "100%", height: 360 }}>
-                      {chartData.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Sem dados suficientes para o gráfico.</div>
-                      ) : (
-                        <ResponsiveContainer>
-                          <BarChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="data" />
-                            <YAxis domain={[0, 100]} />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="Massa gorda (%)" stackId="a" />
-                            <Bar dataKey="Massa livre (%)" stackId="a" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
+                      <ResponsiveContainer>
+                        <BarChart
+                          data={metricas.map((m: any) => {
+                            const mgp =
+                              typeof m.massaGorduraPercent === "number"
+                                ? m.massaGorduraPercent
+                                : typeof m.gorduraPercentual === "number"
+                                ? m.gorduraPercentual
+                                : 0
+                            const mlgp = Math.max(0, 100 - (Number(mgp) || 0))
+                            return {
+                              data:
+                                m.data && !isNaN(new Date(m.data).getTime())
+                                  ? new Date(m.data).toLocaleDateString("pt-BR").slice(0, 5)
+                                  : m.data || "",
+                              massaGorda: Number(Number(mgp).toFixed(1)),
+                              massaLivre: Number(Number(mlgp).toFixed(1)),
+                            }
+                          })}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="data" />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip />
+                          <Legend />
+                          {/* Indigo-500 / Indigo-200 */}
+                          <Bar dataKey="massaGorda" name="Massa gorda (%)" stackId="a" fill="#6366F1" />
+                          <Bar dataKey="massaLivre" name="Massa livre (%)" stackId="a" fill="#C7D2FE" />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </CardContent>
                   </Card>
-                </>
-              )
-            })()
-          }
-          {/* eslint-enable react-hooks/rules-of-hooks */}
-        </section>
+                )}
+
+                {/* --------- Nova Medição (com cálculos automáticos nos onChange) --------- */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Nova Medição</CardTitle>
+                    <CardDescription>Preencha os campos. Os cálculos aparecem automaticamente.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                      <div className="grid gap-2">
+                        <Label>Data da Medição</Label>
+                        <Input
+                          type="date"
+                          value={dataNovaMetrica}
+                          onChange={(e) => setDataNovaMetrica(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Entradas base */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Peso (kg)</Label>
+                          <Input
+                            value={pesoNovo}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setPesoNovo(v)
+                              // recalc
+                              const peso = parseNumber(v)
+                              const altura = parseNumber(alturaNova)
+                              const imc = calculateIMC(peso, altura)
+                              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
+                              setClassificacaoImcNovo(classifyIMC(imc))
+                              // massas
+                              const gPct = parseNumber(gorduraPercentualNovoInput)
+                              const mg = calculateMassaGordura(gPct, peso)
+                              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+                              const mlg = calculateMassaLivreGordura(peso, mg)
+                              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+                              const mr = calculateMassaResidual(peso)
+                              setMassaResidualNovo(mr ? mr.toFixed(2).replace(".", ",") : "")
+                              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+                              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+                              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+                            }}
+                            placeholder="70,5"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Altura (cm)</Label>
+                          <Input
+                            value={alturaNova}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setAlturaNova(v)
+                              const peso = parseNumber(pesoNovo)
+                              const altura = parseNumber(v)
+                              const imc = calculateIMC(peso, altura)
+                              setImcNovo(imc ? imc.toFixed(2).replace(".", ",") : "")
+                              setClassificacaoImcNovo(classifyIMC(imc))
+                            }}
+                            placeholder="170"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Cintura (cm)</Label>
+                          <Input
+                            value={cinturaNovo}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setCinturaNovo(v)
+                              const rcq = calculateRCQ(parseNumber(v), parseNumber(quadrilNovo))
+                              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
+                              setRiscoRcqNovo(classifyRCQ(rcq, patient?.sexo))
+                            }}
+                            placeholder="82"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Quadril (cm)</Label>
+                          <Input
+                            value={quadrilNovo}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setQuadrilNovo(v)
+                              const rcq = calculateRCQ(parseNumber(cinturaNovo), parseNumber(v))
+                              setRcqNovo(rcq ? rcq.toFixed(2).replace(".", ",") : "")
+                              setRiscoRcqNovo(classifyRCQ(rcq, patient?.sexo))
+                            }}
+                            placeholder="95"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Braço (cm)</Label>
+                          <Input
+                            value={bracoNovo}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setBracoNovo(v)
+                              const cmb = calculateCMB(parseNumber(v))
+                              setCmbNovo(cmb ? cmb.toFixed(2).replace(".", ",") : "")
+                              setClassificacaoCmbNovo(classifyCMB(cmb))
+                            }}
+                            placeholder="30"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>% Gordura</Label>
+                          <Input
+                            value={gorduraPercentualNovoInput}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setGorduraPercentualNovoInput(v)
+                              const g = parseNumber(v)
+                              setClassificacaoGorduraNovo(classifyGordura(g))
+                              // massas
+                              const peso = parseNumber(pesoNovo)
+                              const mg = calculateMassaGordura(g, peso)
+                              setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+                              const mlg = calculateMassaLivreGordura(peso, mg)
+                              setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+                              const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+                              setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+                              setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+                            }}
+                            placeholder="22,5"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Somatório de Dobras (mm)</Label>
+                          <Input
+                            value={somatorioDobrasNovo}
+                            onChange={(e) => setSomatorioDobrasNovo(e.target.value)}
+                            placeholder="120"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Densidade Corporal (g/mL)</Label>
+                          <Input
+                            value={densidadeCorporalNovoInput}
+                            onChange={(e) => setDensidadeCorporalNovoInput(e.target.value)}
+                            placeholder="1,070"
+                          />
+                        </div>
+
+                        {/* Calculados (desabilitados) */}
+                        <div className="grid gap-2">
+                          <Label>IMC</Label>
+                          <Input value={imcNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Classificação IMC</Label>
+                          <Input value={classificacaoImcNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>RCQ</Label>
+                          <Input value={rcqNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Risco por RCQ</Label>
+                          <Input value={riscoRcqNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>CMB</Label>
+                          <Input value={cmbNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Classificação CMB</Label>
+                          <Input value={classificacaoCmbNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Classificação Gordura</Label>
+                          <Input value={classificacaoGorduraNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Massa de Gordura (kg)</Label>
+                          <Input value={massaGorduraNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Massa Residual (kg)</Label>
+                          <Input value={massaResidualNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Massa Livre (kg)</Label>
+                          <Input value={massaLivreGorduraNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>% Massa gorda</Label>
+                          <Input value={massaGorduraPercentNovo} disabled placeholder="Calculado" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>% Massa livre</Label>
+                          <Input value={massaLivreGorduraPercentNovo} disabled placeholder="Calculado" />
+                        </div>
+                      </div>
+
+                      {/* Botão salvar */}
+                      <div className="flex justify-center mt-4">
+                        <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                          <Button
+                            onClick={async () => {
+                              if (!user?.email || !patient) return
+                              const nova: any = {
+                                data: dataNovaMetrica,
+                                peso: parseNumber(pesoNovo),
+                                altura: parseNumber(alturaNova),
+                                cintura: parseNumber(cinturaNovo),
+                                quadril: parseNumber(quadrilNovo),
+                                braco: parseNumber(bracoNovo),
+                                somatorioDobras: parseNumber(somatorioDobrasNovo),
+                                densidadeCorporal: parseNumber(densidadeCorporalNovoInput),
+                                imc: imcNovo ? Number(imcNovo.replace(",", ".")) : undefined,
+                                classificacaoImc: classificacaoImcNovo || undefined,
+                                rcq: rcqNovo ? Number(rcqNovo.replace(",", ".")) : undefined,
+                                riscoRcq: riscoRcqNovo || undefined,
+                                cmb: cmbNovo ? Number(cmbNovo.replace(",", ".")) : undefined,
+                                classificacaoCmb: classificacaoCmbNovo || undefined,
+                                gorduraPercentual: parseNumber(gorduraPercentualNovoInput),
+                                classificacaoGordura: classificacaoGorduraNovo || undefined,
+                                massaGordura: massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined,
+                                massaResidual: massaResidualNovo ? Number(massaResidualNovo.replace(",", ".")) : undefined,
+                                massaLivreGordura: massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined,
+                                massaGorduraPercent: massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined,
+                                massaLivreGorduraPercent: massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined,
+                              }
+
+                              try {
+                                const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+                                const snap = await getDoc(refp)
+                                const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+                                // substitui se mesma data, senão adiciona
+                                const filtrado = hist.filter((m) => m.data !== nova.data)
+                                const atualizado = [...filtrado, nova].sort(
+                                  (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+                                )
+                                await updateDoc(refp, { historicoMetricas: atualizado })
+                                setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
+                                setMetricas(atualizado)
+                                toast({ title: "Nova métrica salva com sucesso!" })
+
+                                // limpa campos
+                                setDataNovaMetrica("")
+                                setPesoNovo("")
+                                setAlturaNova("")
+                                setCinturaNovo("")
+                                setQuadrilNovo("")
+                                setBracoNovo("")
+                                setGorduraPercentualNovoInput("")
+                                setSomatorioDobrasNovo("")
+                                setDensidadeCorporalNovoInput("")
+                                setImcNovo("")
+                                setClassificacaoImcNovo("")
+                                setRcqNovo("")
+                                setRiscoRcqNovo("")
+                                setCmbNovo("")
+                                setClassificacaoCmbNovo("")
+                                setClassificacaoGorduraNovo("")
+                                setMassaGorduraNovo("")
+                                setMassaResidualNovo("")
+                                setMassaLivreGorduraNovo("")
+                                setMassaGorduraPercentNovo("")
+                                setMassaLivreGorduraPercentNovo("")
+                              } catch (error) {
+                                console.error(error)
+                                toast({
+                                  title: "Erro ao salvar métrica",
+                                  description: "Verifique os campos e tente novamente.",
+                                  variant: "destructive",
+                                })
+                              }
+                            }}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            Salvar Medição
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            {/* ===== Fim do container principal ===== */}
+          </div>
+        </main>
       </div>
     </div>
   )
 }
+
+
