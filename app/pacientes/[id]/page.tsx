@@ -518,7 +518,7 @@ export default function PatientDetailPage() {
 
   const uploadPhoto = async (file: File, patientId: string, imageName: string) => {
     if (!file) return null;
-    const storageRef = ref(storage, pacientes/${patientId}/fotos/${imageName});
+    const storageRef = ref(storage, `pacientes/${patientId}/fotos/${imageName}`);
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
