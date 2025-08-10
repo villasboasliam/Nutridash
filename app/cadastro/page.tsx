@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, LineChart } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,6 @@ import {
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
 export default function CadastroPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,21 +31,26 @@ export default function CadastroPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // URL base do app para o link de ação
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (typeof window !== "undefined" ? window.location.origin : "");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // 🔐 Cria usuário no Firebase Auth (email/senha)
+      // 1) Cria usuário
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
 
-      // 📧 Envia verificação de e-mail
+      // 2) Envia verificação para rota interna do app
       await sendEmailVerification(user, {
-        url: `${appUrl}/login?verified=1`, // ao confirmar, pode voltar pro login (ajuste se quiser)
-        handleCodeInApp: false,
+        url: `${appUrl}/auth/action`,
+        handleCodeInApp: true,
       });
 
-      // 🗂️ Salva dados no Firestore com ID = UID
+      // 3) Salva doc do nutricionista por UID
       await setDoc(doc(db, "nutricionistas", user.uid), {
         nome: name,
         email,
@@ -67,7 +70,7 @@ export default function CadastroPage() {
       console.error("Erro ao cadastrar:", error);
       toast({
         title: "Erro no cadastro",
-        description: error.message || "Tente novamente.",
+        description: error?.message || "Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -84,7 +87,7 @@ export default function CadastroPage() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // 🗂️ Cria doc no Firestore se não existir (ID = UID)
+      // Cria doc se não existir
       const ref = doc(db, "nutricionistas", user.uid);
       const snap = await getDoc(ref);
       if (!snap.exists()) {
@@ -98,11 +101,11 @@ export default function CadastroPage() {
         });
       }
 
-      // Google geralmente já é verificado, mas por via das dúvidas:
+      // Se por algum motivo o e-mail não veio verificado, dispara verificação
       if (!user.emailVerified && user.email) {
         await sendEmailVerification(user, {
-          url: `${appUrl}/login?verified=1`,
-          handleCodeInApp: false,
+          url: `${appUrl}/auth/action`,
+          handleCodeInApp: true,
         });
         toast({
           title: "Verifique seu e-mail",
@@ -112,17 +115,13 @@ export default function CadastroPage() {
         return;
       }
 
-      toast({
-        title: "Login realizado!",
-        description: "Bem-vindo(a) ao NutriDash.",
-      });
-
-      router.push("/"); // ajuste o destino conforme sua UX
+      toast({ title: "Login realizado!", description: "Bem-vindo(a) ao NutriDash." });
+      router.push("/");
     } catch (error: any) {
       console.error("Erro no login com Google:", error);
       toast({
         title: "Não foi possível entrar com Google",
-        description: error.message || "Tente novamente.",
+        description: error?.message || "Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -150,7 +149,7 @@ export default function CadastroPage() {
           </CardHeader>
 
           <CardContent>
-            {/* Botão Google */}
+            {/* Google */}
             <div className="space-y-4">
               <Button
                 type="button"
@@ -169,7 +168,7 @@ export default function CadastroPage() {
               </div>
             </div>
 
-            {/* Form email/senha */}
+            {/* E-mail/senha */}
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome completo</Label>
