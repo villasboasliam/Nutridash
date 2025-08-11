@@ -1967,11 +1967,15 @@ function SidebarLinks({ pathname }: { pathname: string }) {
       <span>{label}</span>
     </Link>
   )
+
   return (
     <div className="flex flex-col gap-1">
       <Item href="/" label="Início" icon={Home} />
       <Item href="/pacientes" label="Pacientes" icon={Users} />
       <Item href="/dashboard" label="Dashboard" icon={LineChart} />
+      <Item href="/materiais" label="Materiais" icon={FileText} />
+      <Item href="/financeiro" label="Financeiro" icon={DollarSign} />
+      <Item href="/perfil" label="Perfil" icon={User} />
     </div>
   )
 }
