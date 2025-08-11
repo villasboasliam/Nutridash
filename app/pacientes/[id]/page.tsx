@@ -47,6 +47,13 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue
+} from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import {
