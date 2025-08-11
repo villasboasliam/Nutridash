@@ -47,13 +47,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue
-} from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts"
 import {
@@ -69,17 +62,26 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Switch } from "@/components/ui/switch"
 
-// ===== Tipos (NOVOS: histórico dividido em 3 blocos) =====
-type HistoricoBasico = {
+/* =========================================================
+   Tipos originais + ajustes mínimos (mantidos)
+========================================================= */
+type MetricaEntry = {
   data: string
   peso?: number
   altura?: number
+  cintura?: number
+  quadril?: number
+  braco?: number
+  somatorioDobras?: number
+  densidadeCorporal?: number
   imc?: number
   classificacaoImc?: string
   rcq?: number
   riscoRcq?: string
   cmb?: number
   classificacaoCmb?: string
+  gorduraPercentual?: number
+  classificacaoGordura?: string
   massaGordura?: number
   massaResidual?: number
   massaLivreGordura?: number
@@ -87,67 +89,31 @@ type HistoricoBasico = {
   massaLivreGorduraPercent?: number
 }
 
-type HistoricoBio = {
-  gorduraPercentual?: number
-  classificacaoGordura?: string
-  percentualMassaMuscular?: number
-  massaMuscular?: number
-  massaGordura?: number
-  massaLivreGordura?: number
-  indiceGorduraVisceral?: number
-}
-
-type ProtocoloDobrasKey =
+/* =========================================================
+   NOVO: chaves de protocolos + rótulos para os botões
+========================================================= */
+type ProtocoloKey =
   | "pollock3"
   | "pollock7"
   | "petroski"
   | "guedes"
   | "durnin"
   | "faulkner"
-  | "nenhuma"
 
-type HistoricoAntrop = {
-  // Circunferências / medidas antropométricas
-  tricipital?: number
-  coxa?: number
-  supraIliaca?: number
-  cintura?: number
-  quadril?: number
-  bracoRelaxado?: number
-  bracoContraido?: number
-  coxaMedial?: number
-  panturrilha?: number
-  // Dobras
-  protocolo?: ProtocoloDobrasKey
-  sexoParaCalculo?: "feminino" | "masculino"
-  pontos?: Partial<{
-    peitoral: number
-    abdominal: number
-    coxa: number
-    tricipital: number
-    supraIliaca: number
-    axilarMedia: number
-    subescapular: number
-    bicipital: number
-    toracica: number
-    supraespinhal: number
-    panturrilha: number
-  }>
-  somatorioDobras?: number
-  densidadeCorporal?: number
-  gorduraPercentualSiri?: number
+const PROTO_LABEL: Record<ProtocoloKey, string> = {
+  pollock3: "Jackson & Pollock (3)",
+  pollock7: "Jackson & Pollock (7)",
+  petroski: "Petroski",
+  guedes: "Guedes",
+  durnin: "Durnin & Womersley",
+  faulkner: "Faulkner",
 }
 
-type MetricaEntry = {
-  data: string
-  basico: HistoricoBasico
-  bio?: HistoricoBio
-  antrop?: HistoricoAntrop
-}
-
-// ===== Componente =====
+/* =========================================================
+   Componente
+========================================================= */
 export default function PatientDetailPage() {
-  // Upload/diet/foto/material
+  // Upload/diet/foto/material (mantidos)
   const [isDietUploaded, setIsDietUploaded] = useState(false)
   const [isPhotosUploaded, setIsPhotosUploaded] = useState(false)
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([])
@@ -155,7 +121,6 @@ export default function PatientDetailPage() {
   const [nomeDieta, setNomeDieta] = useState("")
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null)
   const [tipoFoto, setTipoFoto] = useState("Foto Frontal")
-  const [dobras, setDobras] = useState<{ [key: string]: string }>({})
 
   const [selectedIndividualPDF, setSelectedIndividualPDF] = useState<File | null>(null)
   const [nomeMaterialIndividual, setNomeMaterialIndividual] = useState("")
@@ -166,7 +131,7 @@ export default function PatientDetailPage() {
     "bg-indigo-600 hover:bg-indigo-700"
   )
 
-  // Estado geral
+  // Estado geral (mantido)
   const [metricas, setMetricas] = useState<MetricaEntry[]>([])
   const params = useParams()
   const rawId = (params?.id as string | undefined) ?? ""
@@ -179,24 +144,34 @@ export default function PatientDetailPage() {
   const { toast } = useToast()
   const [patient, setPatient] = useState<any | null>(null)
   const [isActive, setIsActive] = useState(true)
-
-  // ===== Form: estados base (BÁSICAS) =====
   const [dataNovaMetrica, setDataNovaMetrica] = useState("")
+  const [metricaEditando, setMetricaEditando] = useState<any>(null)
+  const [metricaParaExcluir, setMetricaParaExcluir] = useState<any | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [editInfoOpen, setEditInfoOpen] = useState(false)
+  const [editMetricsOpen, setEditMetricsOpen] = useState(false)
+  const [isSubmittingDiet, setIsSubmittingDiet] = useState(false)
+  const [submitButtonText, setSubmitButtonText] = useState("Enviar Dieta")
+  const [submitButtonColorClass, setSubmitButtonColorClass] = useState("bg-indigo-600 hover:bg-indigo-700")
+  const [erroNomeDieta, setErroNomeDieta] = useState(false)
+
+  // Entradas base (mantidas)
   const [pesoNovo, setPesoNovo] = useState("")
   const [alturaNova, setAlturaNova] = useState("")
   const [cinturaNovo, setCinturaNovo] = useState("")
   const [quadrilNovo, setQuadrilNovo] = useState("")
   const [bracoNovo, setBracoNovo] = useState("")
+  const [gorduraPercentualNovoInput, setGorduraPercentualNovoInput] = useState("")
+  const [somatorioDobrasNovo, setSomatorioDobrasNovo] = useState("")
+  const [densidadeCorporalNovoInput, setDensidadeCorporalNovoInput] = useState("")
 
-  // ===== Switches para blocos =====
-  const [includeAntrop, setIncludeAntrop] = useState(true)
-  const [includeBio, setIncludeBio] = useState(false)
+  // ====== NOVO: protocolos extras e sexo normalizado ======
+  const [protocoloDobras, setProtocoloDobras] = useState<ProtocoloKey>("pollock3")
+  const [sexoAvaliacao, setSexoAvaliacao] = useState<string>((patient?.sexo ?? "feminino").toLowerCase())
 
-  // ===== Antropometria / Dobras – Protocolo e sexo dentro do card =====
-  const [sexoAvaliacao, setSexoAvaliacao] = useState<string>(patient?.sexo ?? "feminino")
-  const [protocoloDobras, setProtocoloDobras] = useState<ProtocoloDobrasKey>("pollock3")
-
-  // Entradas de dobras (pontos possíveis)
+  // Entradas de dobras (mantidas + ampliadas p/ novos protocolos)
   const [dobraPeitoral, setDobraPeitoral] = useState("")
   const [dobraAbdominal, setDobraAbdominal] = useState("")
   const [dobraCoxa, setDobraCoxa] = useState("")
@@ -204,40 +179,27 @@ export default function PatientDetailPage() {
   const [dobraSupraIliaca, setDobraSupraIliaca] = useState("")
   const [dobraAxilarMedia, setDobraAxilarMedia] = useState("")
   const [dobraSubescapular, setDobraSubescapular] = useState("")
-  const [dobraBicipital, setDobraBicipital] = useState("")
-  const [dobraToracica, setDobraToracica] = useState("")
-  const [dobraSupraespinhal, setDobraSupraespinhal] = useState("")
-  const [dobraPanturrilha, setDobraPanturrilha] = useState("")
+  // NOVOS campos para protocolos alternativos
+  const [dobraBicipital, setDobraBicipital] = useState("")      // Durnin & Womersley
+  const [dobraToracica, setDobraToracica] = useState("")        // reserva (se precisar em variações)
+  const [dobraSupraespinhal, setDobraSupraespinhal] = useState("") // reserva (variações)
+  const [dobraPanturrilha, setDobraPanturrilha] = useState("")  // Petroski (variações)
 
-  // Medidas antropométricas extras (como na sua tabela)
-  const [tricipitalNovo, setTricipitalNovo] = useState("")
-  const [coxaNovo, setCoxaNovo] = useState("")
-  const [supraIliacaNovo, setSupraIliacaNovo] = useState("")
-  const [bracoRelaxadoNovo, setBracoRelaxadoNovo] = useState("")
-  const [bracoContraidoNovo, setBracoContraidoNovo] = useState("")
-  const [coxaMedialNovo, setCoxaMedialNovo] = useState("")
-  const [panturrilhaNovo, setPanturrilhaNovo] = useState("")
-
-  // Bioimpedância
-  const [bioPercentGordura, setBioPercentGordura] = useState("")
-  const [bioPercentMassaMuscular, setBioPercentMassaMuscular] = useState("")
-  const [bioMassaMuscular, setBioMassaMuscular] = useState("")
-  const [bioMassaGordura, setBioMassaGordura] = useState("")
-  const [bioMassaLivre, setBioMassaLivre] = useState("")
-  const [bioIGV, setBioIGV] = useState("")
+  // Calculados (mantidos)
+  const [imcNovo, setImcNovo] = useState("")
+  const [classificacaoImcNovo, setClassificacaoImcNovo] = useState("")
+  const [rcqNovo, setRcqNovo] = useState("")
+  const [riscoRcqNovo, setRiscoRcqNovo] = useState("")
+  const [cmbNovo, setCmbNovo] = useState("")
+  const [classificacaoCmbNovo, setClassificacaoCmbNovo] = useState("")
+  const [classificacaoGorduraNovo, setClassificacaoGorduraNovo] = useState("")
+  const [massaGorduraNovo, setMassaGorduraNovo] = useState("")
+  const [massaResidualNovo, setMassaResidualNovo] = useState("")
+  const [massaLivreGorduraNovo, setMassaLivreGorduraNovo] = useState("")
+  const [massaGorduraPercentNovo, setMassaGorduraPercentNovo] = useState("")
+  const [massaLivreGorduraPercentNovo, setMassaLivreGorduraPercentNovo] = useState("")
 
   // Edição simples (mantido)
-  const [editInfoOpen, setEditInfoOpen] = useState(false)
-  const [editMetricsOpen, setEditMetricsOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [mostrarSenha, setMostrarSenha] = useState(false)
-  const [isSubmittingDiet, setIsSubmittingDiet] = useState(false)
-  const [submitButtonText, setSubmitButtonText] = useState("Enviar Dieta")
-  const [submitButtonColorClass, setSubmitButtonColorClass] = useState("bg-indigo-600 hover:bg-indigo-700")
-  const [erroNomeDieta, setErroNomeDieta] = useState(false)
-  const [metricaEditando, setMetricaEditando] = useState<any>(null)
-  const [metricaParaExcluir, setMetricaParaExcluir] = useState<any | null>(null)
-
   const [editData, setEditData] = useState({
     name: "",
     email: "",
@@ -253,7 +215,6 @@ export default function PatientDetailPage() {
     cintura: 0,
   })
 
-  // ===== Sincroniza dados básicos do paciente e sexo para cálculo =====
   useEffect(() => {
     if (!patient) return
     setEditData({
@@ -264,16 +225,14 @@ export default function PatientDetailPage() {
       valorConsulta: patient.valorConsulta || "",
     })
     setIsActive((patient.status || "Ativo") === "Ativo")
-    if (patient.sexo) setSexoAvaliacao(patient.sexo)
+    if (patient.sexo) setSexoAvaliacao(String(patient.sexo).toLowerCase())
   }, [patient])
 
-  // ===== Utils =====
+  /* ======================= Utils (mantidos) ======================= */
   const parseNumber = (value: string) => {
     const cleanedValue = value.replace(",", ".")
     return isNaN(Number(cleanedValue)) || cleanedValue.trim() === "" ? 0 : Number(cleanedValue)
   }
-  const toNum = (v: string) => (v.trim() === "" ? 0 : Number(v.replace(",", ".")))
-  const toStrPt = (n: number, d = 2) => (n ? n.toFixed(d).replace(".", ",") : "")
 
   const formatTelefone = (telefone: string) => {
     const cleaned = telefone.replace(/\D/g, "")
@@ -357,7 +316,7 @@ export default function PatientDetailPage() {
   // Siri (%G = 495/D − 450)
   const siriPercent = (d: number) => (d ? 495 / d - 450 : 0)
 
-  // ===== Densidades por modelo =====
+  /* ======================= Densidades por modelo ======================= */
   const densidadePollock3 = (sum: number, idade: number, sexo: string) => {
     const fem = (sexo || "").toLowerCase().startsWith("f")
     return fem
@@ -370,21 +329,21 @@ export default function PatientDetailPage() {
       ? 1.097 - 0.00046971 * sum + 0.00000056 * sum * sum - 0.00012828 * idade
       : 1.112 - 0.00043499 * sum + 0.00000055 * sum * sum - 0.00028826 * idade
   }
-  // Petroski (7 dobras – coeficientes usuais com log10 da soma)
+  // Petroski (7 dobras – log10 da soma)
   const densidadePetroski7 = (sum: number, idade: number, sexo: string) => {
     const fem = (sexo || "").toLowerCase().startsWith("f")
     return fem
       ? 1.1954713 - 0.07513507 * Math.log10(sum) - 0.00041072 * idade
       : 1.17136 - 0.06706 * Math.log10(sum) - 0.000221 * idade
   }
-  // Guedes (3 dobras: tri + supra + coxa)
+  // Guedes (3 dobras: tri + supra + coxa) com log10
   const densidadeGuedes3 = (sum: number, idade: number, sexo: string) => {
     const fem = (sexo || "").toLowerCase().startsWith("f")
     return fem
       ? 1.1714 - 0.0779 * Math.log10(sum) - 0.00073 * idade
       : 1.17136 - 0.06706 * Math.log10(sum) - 0.000221 * idade
   }
-  // Durnin & Womersley (4 dobras: bicipital + tricipital + subescapular + supra-ilíaca)
+  // Durnin & Womersley (bicipital + tricipital + subescapular + supra-ilíaca)
   const densidadeDurnin4 = (sum: number, idade: number, sexo: string) => {
     const fem = (sexo || "").toLowerCase().startsWith("f")
     const L = Math.log10(sum)
@@ -405,972 +364,1674 @@ export default function PatientDetailPage() {
       return set(1.1715, 0.0779)
     }
   }
-  // Faulkner (4 dobras) – %G ≈ 0.153*somatório + 5.783 (convertemos para densidade equivalente)
+  // Faulkner (4 dobras) – %G ≈ 0.153*somatório + 5.783  → densidade equivalente
   const densidadeFaulkner4 = (sum: number) => {
     const perc = 0.153 * sum + 5.783
     return 495 / (perc + 450)
   }
 
-  // Monta soma/densidade conforme protocolo
-  function calcSkinfold(
-    protocolo: ProtocoloDobrasKey,
-    sexo: string,
-    idade: number,
-    pts: Record<string, number>
-  ) {
+  /* ======================= Recalcular da UI de dobras ======================= */
+  const recalcFromSkinfolds = useCallback(() => {
+    const n = (v: string) => (v.trim() === "" ? 0 : Number(v.replace(",", ".")))
+    const idade = getIdade()
+    const sexo = (sexoAvaliacao || "").toLowerCase()
+
     let soma = 0
     let dens = 0
-    switch (protocolo) {
+
+    switch (protocoloDobras) {
       case "pollock3": {
-        const fem = (sexo || "").toLowerCase().startsWith("f")
+        const fem = sexo.startsWith("f")
         soma = fem
-          ? pts.tricipital + pts.supraIliaca + pts.coxa
-          : pts.peitoral + pts.abdominal + pts.coxa
+          ? n(dobraTricipital) + n(dobraSupraIliaca) + n(dobraCoxa)
+          : n(dobraPeitoral) + n(dobraAbdominal) + n(dobraCoxa)
         dens = densidadePollock3(soma, idade, sexo)
         break
       }
       case "pollock7": {
         soma =
-          pts.peitoral +
-          pts.axilarMedia +
-          pts.tricipital +
-          pts.subescapular +
-          pts.abdominal +
-          pts.supraIliaca +
-          pts.coxa
+          n(dobraPeitoral) +
+          n(dobraAxilarMedia) +
+          n(dobraTricipital) +
+          n(dobraSubescapular) +
+          n(dobraAbdominal) +
+          n(dobraSupraIliaca) +
+          n(dobraCoxa)
         dens = densidadePollock7(soma, idade, sexo)
         break
       }
       case "petroski": {
+        // variações com 7; aqui usamos um conjunto típico: peitoral+axilar+tríceps+subescapular+abdominal+supra-ilíaca+coxa
         soma =
-          pts.peitoral +
-          pts.axilarMedia +
-          pts.tricipital +
-          pts.subescapular +
-          pts.abdominal +
-          pts.supraIliaca +
-          pts.coxa
-        dens = densidadePetroski7(soma, idade, sexo)
+          n(dobraPeitoral) +
+          n(dobraAxilarMedia) +
+          n(dobraTricipital) +
+          n(dobraSubescapular) +
+          n(dobraAbdominal) +
+          n(dobraSupraIliaca) +
+          n(dobraCoxa)
+        dens = soma > 0 ? densidadePetroski7(soma, idade, sexo) : 0
         break
       }
       case "guedes": {
-        soma = pts.tricipital + pts.supraIliaca + pts.coxa
-        dens = densidadeGuedes3(soma, idade, sexo)
+        // 3 dobras: tríceps + supra-ilíaca + coxa
+        soma = n(dobraTricipital) + n(dobraSupraIliaca) + n(dobraCoxa)
+        dens = soma > 0 ? densidadeGuedes3(soma, idade, sexo) : 0
         break
       }
       case "durnin": {
-        soma = pts.bicipital + pts.tricipital + pts.subescapular + pts.supraIliaca
-        dens = densidadeDurnin4(soma, idade, sexo)
+        // 4 dobras: bíceps + tríceps + subescapular + supra-ilíaca
+        soma = n(dobraBicipital) + n(dobraTricipital) + n(dobraSubescapular) + n(dobraSupraIliaca)
+        dens = soma > 0 ? densidadeDurnin4(soma, idade, sexo) : 0
         break
       }
       case "faulkner": {
-        soma = pts.tricipital + pts.subescapular + pts.supraIliaca + pts.abdominal
-        dens = densidadeFaulkner4(soma)
+        // 4 dobras: tríceps + subescapular + supra-ilíaca + abdominal
+        soma = n(dobraTricipital) + n(dobraSubescapular) + n(dobraSupraIliaca) + n(dobraAbdominal)
+        dens = soma > 0 ? densidadeFaulkner4(soma) : 0
         break
       }
-      case "nenhuma":
       default:
         soma = 0
         dens = 0
     }
+
     const perc = siriPercent(dens)
-    return { soma, densidade: dens, percentual: perc }
+
+    // Atualiza UI (pt-BR)
+    setSomatorioDobrasNovo(soma ? String(Math.round(soma)) : "")
+    setDensidadeCorporalNovoInput(dens ? dens.toFixed(3).replace(".", ",") : "")
+    setGorduraPercentualNovoInput(perc ? perc.toFixed(1).replace(".", ",") : "")
+
+    // Propaga massas
+    const peso = parseNumber(pesoNovo)
+    const mg = (perc / 100) * (peso || 0)
+    setMassaGorduraNovo(mg ? mg.toFixed(2).replace(".", ",") : "")
+    const mlg = peso ? peso - mg : 0
+    setMassaLivreGorduraNovo(mlg ? mlg.toFixed(2).replace(".", ",") : "")
+    const mr = calculateMassaResidual(peso)
+    setMassaResidualNovo(mr ? mr.toFixed(2).replace(".", ",") : "")
+    const mgPerc = peso > 0 ? (mg / peso) * 100 : 0
+    setMassaGorduraPercentNovo(mgPerc ? mgPerc.toFixed(1).replace(".", ",") : "")
+    setMassaLivreGorduraPercentNovo(mgPerc ? (100 - mgPerc).toFixed(1).replace(".", ",") : "")
+  }, [
+    protocoloDobras,
+    sexoAvaliacao,
+    // dobras
+    dobraPeitoral,
+    dobraAbdominal,
+    dobraCoxa,
+    dobraTricipital,
+    dobraSupraIliaca,
+    dobraAxilarMedia,
+    dobraSubescapular,
+    dobraBicipital,
+    // peso
+    pesoNovo,
+    calculateMassaResidual,
+    parseNumber,
+  ])
+
+  useEffect(() => {
+    recalcFromSkinfolds()
+  }, [recalcFromSkinfolds])
+
+  /* ======================= Upload helpers (mantidos) ======================= */
+  const uploadPhoto = async (file: File, patientId: string, imageName: string) => {
+    if (!file) return null
+    const storageRefObj = ref(storage, `pacientes/${patientId}/fotos/${imageName}`)
+    const snapshot = await uploadBytes(storageRefObj, file)
+    const downloadURL = await getDownloadURL(snapshot.ref)
+    return downloadURL
+  }
+  const uploadPDF = async (file: File, patientId: string) => {
+    if (!file) return null
+    const storageRefObj = ref(storage, `pacientes/${patientId}/dietas/${file.name}`)
+    const snapshot = await uploadBytes(storageRefObj, file)
+    const downloadURL = await getDownloadURL(snapshot.ref)
+    return downloadURL
+  }
+  const uploadIndividualPDF = async (file: File, patientId: string) => {
+    if (!file) return null
+    const storageRefObj = ref(storage, `pacientes/${patientId}/materiais_individuais/${file.name}`)
+    const snapshot = await uploadBytes(storageRefObj, file)
+    const downloadURL = await getDownloadURL(snapshot.ref)
+    return downloadURL
   }
 
-  // Atualiza sexo quando carregar paciente
+  /* ======================= Handlers Dieta/Foto/Material (mantidos) ======================= */
+  // ... (mantém exatamente seus handlers a partir daqui — já vou reaproveitar na PARTE 2)
+  /* ======================= Handlers Dieta / Foto / Material ======================= */
+  const handleReplaceDiet = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!user?.email) {
+      toast({ title: "Erro de autenticação", description: "Usuário não autenticado. Tente novamente." })
+      return
+    }
+    const file = selectedPDF
+    if (!file) {
+      toast({ title: "Nenhum arquivo selecionado", description: "Selecione um PDF." })
+      return
+    }
+    if (!nomeDieta.trim()) { setErroNomeDieta(true); return } else { setErroNomeDieta(false) }
+
+    setIsSubmittingDiet(true)
+    try {
+      const downloadURL = await uploadPDF(file, id)
+      const novaDieta = {
+        nome: file.name,
+        url: downloadURL,
+        dataEnvio: new Date().toLocaleDateString("pt-BR"),
+        nomeDieta: nomeDieta,
+      }
+      const refPac = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPac, { dietas: arrayUnion(novaDieta) })
+
+      setPatient((prev: any) => prev ? { ...prev, dietas: prev.dietas ? [...prev.dietas, novaDieta] : [novaDieta] } : prev)
+
+      // estatísticas (opcional)
+      const statRef = doc(db, "nutricionistas", user.email, "estatisticas", "dietas")
+      try {
+        const statSnap = await getDoc(statRef)
+        if (statSnap.exists()) {
+          const atual = statSnap.data().totalDietasEnviadas || 0
+          await updateDoc(statRef, { totalDietasEnviadas: atual + 1, ultimaAtualizacao: new Date().toISOString() })
+        } else {
+          await setDoc(statRef, { totalDietasEnviadas: 1, ultimaAtualizacao: new Date().toISOString() })
+        }
+      } catch {}
+
+      setIsDietUploaded(true)
+      toast({ title: "Dieta Enviada", description: "A dieta foi enviada com sucesso." })
+      setSubmitButtonText("Enviado!")
+      setSubmitButtonColorClass("bg-green-500 hover:bg-green-600")
+      setTimeout(() => {
+        setSubmitButtonText("Enviar Dieta")
+        setSubmitButtonColorClass("bg-indigo-600 hover:bg-indigo-700")
+        setIsSubmittingDiet(false)
+      }, 3000)
+      setSelectedPDF(null); setNomeDieta("")
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao enviar dieta", description: "Não foi possível enviar o arquivo." })
+      setIsSubmittingDiet(false)
+    }
+  }
+
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) setSelectedPhoto(file)
+  }
+
+  const handleUploadPhotos = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!user?.email) { toast({ title: "Erro", description: "Usuário não autenticado." }); return }
+    if (!selectedPhoto) { toast({ title: "Nenhuma foto selecionada", description: "Selecione uma foto." }); return }
+
+    try {
+      const downloadURL = await uploadPhoto(selectedPhoto, id, `${tipoFoto.replace(/\s+/g, "_")}_${Date.now()}`)
+      const novaFoto = { dataEnvio: new Date().toLocaleDateString("pt-BR"), tipo: tipoFoto, url: downloadURL, nomeArquivo: selectedPhoto.name }
+      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPaciente, { fotos: arrayUnion(novaFoto) })
+      setPatient((prev: any) => prev ? { ...prev, fotos: prev?.fotos ? [...prev.fotos, novaFoto] : [novaFoto] } : prev)
+      toast({ title: "Foto enviada", description: "A foto foi enviada com sucesso." })
+      setSelectedPhoto(null)
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao enviar foto", description: "Não foi possível enviar a foto." })
+    }
+  }
+
+  const handleDeletePhoto = async (fotoToDelete: any) => {
+    if (!user?.email || !patient) return
+    try {
+      const novasFotos = (patient.fotos || []).filter((f: any) => f.url !== fotoToDelete.url)
+      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPaciente, { fotos: novasFotos })
+      if (fotoToDelete.nomeArquivo) {
+        try { await deleteObject(ref(storage, `pacientes/${id}/fotos/${fotoToDelete.nomeArquivo}`)) } catch {}
+      }
+      setPatient((prev: any) => ({ ...prev, fotos: novasFotos }))
+      toast({ title: "Foto excluída com sucesso" })
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao excluir foto", description: "Não foi possível remover a foto." })
+    }
+  }
+
+  const handleUploadIndividualMaterial = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!user?.email) { toast({ title: "Erro de autenticação", description: "Usuário não autenticado." }); return }
+    const file = selectedIndividualPDF
+    if (!file) { toast({ title: "Nenhum arquivo selecionado", description: "Selecione um PDF." }); return }
+    if (!nomeMaterialIndividual.trim()) { toast({ title: "Erro", description: "Informe o nome do material." }); return }
+
+    setIsSubmittingIndividualMaterial(true)
+    try {
+      const storageRefPath = `pacientes/${id}/materiais_individuais/${file.name}`
+      const storageRefUpload = ref(storage, storageRefPath)
+      const snapshot = await uploadBytes(storageRefUpload, file)
+      const downloadURL = await getDownloadURL(snapshot.ref)
+      const novoMaterial = {
+        nome: file.name,
+        nomeMaterial: nomeMaterialIndividual,
+        url: downloadURL,
+        dataEnvio: new Date().toLocaleDateString("pt-BR"),
+      }
+      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPaciente, { materiaisIndividuais: arrayUnion(novoMaterial) })
+      setPatient((prev: any) => prev ? {
+        ...prev,
+        materiaisIndividuais: prev?.materiaisIndividuais ? [...prev.materiaisIndividuais, novoMaterial] : [novoMaterial],
+      } : prev)
+      toast({ title: "Material Individual Enviado", description: "Arquivo enviado com sucesso." })
+      setSubmitIndividualMaterialText("Enviado!")
+      setSubmitIndividualMaterialColorClass("bg-green-500 hover:bg-green-600")
+      setTimeout(() => {
+        setSubmitIndividualMaterialText("Enviar Material")
+        setSubmitIndividualMaterialColorClass("bg-indigo-600 hover:bg-indigo-700")
+        setIsSubmittingIndividualMaterial(false)
+      }, 2000)
+      setSelectedIndividualPDF(null); setNomeMaterialIndividual("")
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao enviar material", description: "Não foi possível enviar o arquivo." })
+      setIsSubmittingIndividualMaterial(false)
+    }
+  }
+
+  const handleDeleteIndividualMaterial = async (materialToDelete: any) => {
+    if (!user?.email || !patient) return
+    try {
+      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPaciente, { materiaisIndividuais: arrayRemove(materialToDelete) })
+      try { await deleteObject(ref(storage, `pacientes/${id}/materiais_individuais/${materialToDelete.nome}`)) } catch {}
+      setPatient((prev:any)=> prev ? {
+        ...prev,
+        materiaisIndividuais: (prev?.materiaisIndividuais || []).filter((m:any)=>m.url!==materialToDelete.url)
+      } : prev)
+      toast({ title: "Material individual excluído", description: "O material foi removido com sucesso." })
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao excluir material individual", description: "Não foi possível remover o material." })
+    }
+  }
+
+  const handleDeleteDiet = async (dietaToDelete: any) => {
+    if (!user?.email || !patient) return
+    try {
+      const refPaciente = doc(db, "nutricionistas", user.email, "pacientes", id)
+      await updateDoc(refPaciente, { dietas: arrayRemove(dietaToDelete) })
+      try {
+        const storageRefPath = ref(storage, `pacientes/${id}/dietas/${dietaToDelete.nome}`)
+        await deleteObject(storageRefPath)
+      } catch {}
+      setPatient((prev: any) =>
+        prev ? { ...prev, dietas: (prev.dietas || []).filter((d: any) => d.url !== dietaToDelete.url) } : prev
+      )
+      toast({ title: "Dieta excluída com sucesso" })
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Erro ao excluir dieta", description: "Não foi possível remover o arquivo." })
+    }
+  }
+
+  /* ======================= Firestore: buscar/atualizar/excluir paciente ======================= */
+  const fetchPatient = async () => {
+    if (!user?.email) return
+    try {
+      const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+      const snap = await getDoc(refp)
+      if (snap.exists()) {
+        const data = snap.data()
+        setPatient({ ...data })
+        const historico = (data.historicoMetricas || []) as MetricaEntry[]
+        historico.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+        setMetricas(historico)
+        setIsActive((data.status || "Ativo") === "Ativo")
+      }
+    } catch (error) {
+      console.error("Erro ao buscar paciente ou métricas:", error)
+    }
+  }
+
   useEffect(() => {
-    if (patient?.sexo) setSexoAvaliacao(patient.sexo)
-  }, [patient?.sexo])
+    if (!id || !user?.email) return
+    fetchPatient()
+  }, [id, user])
+
+  const handleSaveInfo = async () => {
+    if (!user?.email) return
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refp, {
+      nome: editData.name,
+      telefone: editData.telefone,
+      birthdate: editData.birthdate,
+      valorConsulta: editData.valorConsulta,
+    })
+    setPatient((prev: any) => prev ? ({ ...prev, ...editData }) : prev)
+    toast({ title: "Informações atualizadas com sucesso" })
+    setEditInfoOpen(false)
+  }
+
+  const handleSaveMetrics = async () => {
+    if (!user?.email) return
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refp, {
+      peso_atual: editMetrics.peso,
+      altura: editMetrics.altura,
+      gordura: editMetrics.gordura,
+      massa_magra: editMetrics.massaMagra,
+      cintura: editMetrics.cintura,
+    })
+    setPatient((prev: any) => prev ? ({ ...prev, ...editMetrics }) : prev)
+    toast({ title: "Métricas atualizadas com sucesso" })
+    setEditMetricsOpen(false)
+  }
+
+  const handleDeletePatient = async () => {
+    if (!user?.email) return
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await deleteDoc(refp)
+    toast({ title: "Paciente excluído", description: "O paciente foi permanentemente deletado." })
+    router.push("/pacientes")
+  }
+
+  const togglePatientStatus = async () => {
+    if (!user?.email) return
+    const novoStatus = isActive ? "Inativo" : "Ativo"
+    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+    await updateDoc(refp, { status: novoStatus })
+    setIsActive(!isActive)
+    toast({ title: `Paciente ${novoStatus === "Ativo" ? "ativado" : "inativado"}` })
+  }
 
   const isClient = typeof window !== "undefined"
-
-  // ===== (FIM DA PARTE 1) =====
-  // A PRÓXIMA PARTE COMEÇA AQUI:
-  // ===== Handlers Dieta / Foto / Material (detalhes das tabs) =====
-  // ===== Handlers Dieta / Foto / Material =====
-  const handleDietUpload = async () => {
-    if (!selectedPDF || !nomeDieta.trim()) {
-      setErroNomeDieta(true)
-      toast({ title: "Erro", description: "Preencha o nome e selecione um arquivo PDF." })
-      return
-    }
-    try {
-      setIsSubmittingDiet(true)
-      setSubmitButtonText("Enviando...")
-      setSubmitButtonColorClass("bg-gray-400")
-      const storageRef = ref(storage, `dietas/${user?.email}/${id}/${nomeDieta}.pdf`)
-      await uploadBytes(storageRef, selectedPDF)
-      const url = await getDownloadURL(storageRef)
-      await updateDoc(doc(db, "pacientes", id), {
-        dietas: arrayUnion({ nome: nomeDieta, url }),
-      })
-      setIsDietUploaded(true)
-      setNomeDieta("")
-      setSelectedPDF(null)
-      toast({ title: "Sucesso", description: "Dieta enviada com sucesso!" })
-    } catch (error) {
-      console.error("Erro ao enviar dieta:", error)
-      toast({ title: "Erro", description: "Falha ao enviar dieta." })
-    } finally {
-      setIsSubmittingDiet(false)
-      setSubmitButtonText("Enviar Dieta")
-      setSubmitButtonColorClass("bg-indigo-600 hover:bg-indigo-700")
-    }
-  }
-
-  const handlePhotoUpload = async () => {
-    if (!selectedPhoto || !tipoFoto.trim()) {
-      toast({ title: "Erro", description: "Selecione a foto e o tipo." })
-      return
-    }
-    try {
-      const storageRef = ref(storage, `fotos/${user?.email}/${id}/${tipoFoto}.jpg`)
-      await uploadBytes(storageRef, selectedPhoto)
-      const url = await getDownloadURL(storageRef)
-      await updateDoc(doc(db, "pacientes", id), {
-        fotos: arrayUnion({ tipo: tipoFoto, url }),
-      })
-      setIsPhotosUploaded(true)
-      setSelectedPhoto(null)
-      toast({ title: "Sucesso", description: "Foto enviada com sucesso!" })
-    } catch (error) {
-      console.error("Erro ao enviar foto:", error)
-      toast({ title: "Erro", description: "Falha ao enviar foto." })
-    }
-  }
-
-  const handleIndividualMaterialUpload = async () => {
-    if (!selectedIndividualPDF || !nomeMaterialIndividual.trim()) {
-      toast({ title: "Erro", description: "Preencha o nome e selecione um arquivo PDF." })
-      return
-    }
-    try {
-      setIsSubmittingIndividualMaterial(true)
-      setSubmitIndividualMaterialText("Enviando...")
-      setSubmitIndividualMaterialColorClass("bg-gray-400")
-      const storageRef = ref(
-        storage,
-        `materiais/${user?.email}/${id}/${nomeMaterialIndividual}.pdf`
-      )
-      await uploadBytes(storageRef, selectedIndividualPDF)
-      const url = await getDownloadURL(storageRef)
-      await updateDoc(doc(db, "pacientes", id), {
-        materiais: arrayUnion({ nome: nomeMaterialIndividual, url }),
-      })
-      setIndividualMaterials((prev) => [
-        ...prev,
-        { nome: nomeMaterialIndividual, url },
-      ])
-      setNomeMaterialIndividual("")
-      setSelectedIndividualPDF(null)
-      toast({ title: "Sucesso", description: "Material enviado com sucesso!" })
-    } catch (error) {
-      console.error("Erro ao enviar material:", error)
-      toast({ title: "Erro", description: "Falha ao enviar material." })
-    } finally {
-      setIsSubmittingIndividualMaterial(false)
-      setSubmitIndividualMaterialText("Enviar Material")
-      setSubmitIndividualMaterialColorClass("bg-indigo-600 hover:bg-indigo-700")
-    }
-  }
-
-  // ===== Carregamento inicial =====
-  useEffect(() => {
-    const fetchPatient = async () => {
-      if (!id) return
-      const docSnap = await getDoc(doc(db, "pacientes", id))
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setPatient(data)
-        if (Array.isArray(data.metricas)) {
-          setMetricas(data.metricas as MetricaEntry[])
-        }
-      }
-    }
-    fetchPatient()
-  }, [id])
-
-  // ===== Salvar nova métrica =====
-  const salvarNovaMetrica = async () => {
-    const peso = parseNumber(pesoNovo)
-    const altura = parseNumber(alturaNova)
-    const cintura = parseNumber(cinturaNovo)
-    const quadril = parseNumber(quadrilNovo)
-    const braco = parseNumber(bracoNovo)
-
-    const imc = calculateIMC(peso, altura)
-    const rcq = calculateRCQ(cintura, quadril)
-    const cmb = calculateCMB(braco)
-    const classificacaoImc = classifyIMC(imc)
-    const riscoRcq = classifyRCQ(rcq, sexoAvaliacao)
-    const classificacaoCmb = classifyCMB(cmb)
-
-    // Massa gordura/magra
-    const massaGordura = calculateMassaGordura(bioPercentGordura ? parseNumber(bioPercentGordura) : 0, peso)
-    const massaLivre = calculateMassaLivreGordura(peso, massaGordura)
-    const massaResidual = calculateMassaResidual(peso)
-
-    // Dobras - cálculo apenas se incluído
-    let antrop: HistoricoAntrop | undefined
-    if (includeAntrop) {
-      const pts: Record<string, number> = {
-        peitoral: toNum(dobraPeitoral),
-        abdominal: toNum(dobraAbdominal),
-        coxa: toNum(dobraCoxa),
-        tricipital: toNum(dobraTricipital),
-        supraIliaca: toNum(dobraSupraIliaca),
-        axilarMedia: toNum(dobraAxilarMedia),
-        subescapular: toNum(dobraSubescapular),
-        bicipital: toNum(dobraBicipital),
-        toracica: toNum(dobraToracica),
-        supraespinhal: toNum(dobraSupraespinhal),
-        panturrilha: toNum(dobraPanturrilha),
-      }
-      const { soma, densidade, percentual } = calcSkinfold(
-        protocoloDobras,
-        sexoAvaliacao,
-        getIdade(),
-        pts
-      )
-      antrop = {
-        protocolo: protocoloDobras,
-        sexoParaCalculo: sexoAvaliacao,
-        pontos: pts,
-        somatorioDobras: soma,
-        densidadeCorporal: densidade,
-        gorduraPercentualSiri: percentual,
-      }
-    }
-
-    // Bioimpedância
-    let bio: HistoricoBio | undefined
-    if (includeBio) {
-      bio = {
-        gorduraPercentual: parseNumber(bioPercentGordura),
-        classificacaoGordura: classifyGordura(parseNumber(bioPercentGordura)),
-        percentualMassaMuscular: parseNumber(bioPercentMassaMuscular),
-        massaMuscular: parseNumber(bioMassaMuscular),
-        massaGordura: parseNumber(bioMassaGordura),
-        massaLivreGordura: parseNumber(bioMassaLivre),
-        indiceGorduraVisceral: parseNumber(bioIGV),
-      }
-    }
-
-    const novaMetrica: MetricaEntry = {
-      data: dataNovaMetrica || new Date().toISOString().split("T")[0],
-      basico: {
-        data: dataNovaMetrica || new Date().toISOString().split("T")[0],
-        peso,
-        altura,
-        imc,
-        classificacaoImc,
-        rcq,
-        riscoRcq,
-        cmb,
-        classificacaoCmb,
-        massaGordura,
-        massaResidual,
-        massaLivreGordura: massaLivre,
-        massaGorduraPercent: bio?.gorduraPercentual,
-        massaLivreGorduraPercent: bio ? 100 - (bio.gorduraPercentual || 0) : undefined,
-      },
-      bio,
-      antrop,
-    }
-
-    try {
-      const refDoc = doc(db, "pacientes", id)
-      await updateDoc(refDoc, {
-        metricas: arrayUnion(novaMetrica),
-      })
-      setMetricas((prev) => [...prev, novaMetrica])
-      toast({ title: "Sucesso", description: "Medição salva com sucesso!" })
-    } catch (err) {
-      console.error("Erro ao salvar métrica:", err)
-      toast({ title: "Erro", description: "Falha ao salvar métrica." })
-    }
-  }
-
-  // ===== Excluir métrica =====
-  const excluirMetrica = async (metrica: MetricaEntry) => {
-    try {
-      const refDoc = doc(db, "pacientes", id)
-      await updateDoc(refDoc, {
-        metricas: arrayRemove(metrica),
-      })
-      setMetricas((prev) => prev.filter((m) => m !== metrica))
-      toast({ title: "Sucesso", description: "Medição excluída." })
-    } catch (err) {
-      console.error("Erro ao excluir métrica:", err)
-      toast({ title: "Erro", description: "Falha ao excluir." })
-    }
-  }
+  /* ======================= Layout / UI principal ======================= */
   return (
-    <div className="p-6 space-y-8">
-      {/* -------- BLOCO 1: ANÁLISES BÁSICAS -------- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Análises básicas</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div>
-            <Label>Data da Medição</Label>
-            <Input
-              type="date"
-              value={dataNovaMetrica}
-              onChange={(e) => setDataNovaMetrica(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Peso (kg)</Label>
-            <Input
-              value={pesoNovo}
-              onChange={(e) => setPesoNovo(e.target.value)}
-              placeholder="Ex: 70,5"
-            />
-          </div>
-          <div>
-            <Label>Altura (cm)</Label>
-            <Input
-              value={alturaNova}
-              onChange={(e) => setAlturaNova(e.target.value)}
-              placeholder="Ex: 170"
-            />
-          </div>
-          <div>
-            <Label>Cintura (cm)</Label>
-            <Input
-              value={cinturaNovo}
-              onChange={(e) => setCinturaNovo(e.target.value)}
-              placeholder="Ex: 82"
-            />
-          </div>
-          <div>
-            <Label>Quadril (cm)</Label>
-            <Input
-              value={quadrilNovo}
-              onChange={(e) => setQuadrilNovo(e.target.value)}
-              placeholder="Ex: 95"
-            />
-          </div>
-          <div>
-            <Label>Braço (cm)</Label>
-            <Input
-              value={bracoNovo}
-              onChange={(e) => setBracoNovo(e.target.value)}
-              placeholder="Ex: 30"
-            />
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex min-h-screen">
+      {/* Sidebar fixa */}
+      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+            <LineChart className="h-5 w-5" />
+            <span>NutriDash</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 p-2">
+          <SidebarLinks pathname={pathname} t={t} />
+        </nav>
+      </aside>
 
-      {/* -------- BLOCO 2: DOBRAS CUTÂNEAS -------- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Dobras cutâneas (antropometria)</CardTitle>
-          <div className="flex items-center gap-4">
-            <Switch
-              checked={includeAntrop}
-              onCheckedChange={setIncludeAntrop}
-            />
-            <span>Incluir antropometria</span>
+      {/* Conteúdo */}
+      <div className="flex flex-col flex-1 lg:ml-64">
+        {/* Header */}
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="lg:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <div className="flex h-14 items-center border-b px-4">
+                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+                  <LineChart className="h-5 w-5" />
+                  <span>NutriDash</span>
+                </Link>
+              </div>
+              <nav className="flex-1 space-y-1 p-2">
+                <SidebarLinks pathname={pathname} t={t} />
+              </nav>
+            </SheetContent>
+          </Sheet>
+          <div className="w-full flex-1">
+            <div className="flex items-center">
+              <h2 className="text-lg font-medium">Detalhes do Paciente</h2>
+            </div>
           </div>
-        </CardHeader>
-        {includeAntrop && (
-          <CardContent className="space-y-4">
-            {/* Botões de seleção de protocolo */}
-            <div className="flex flex-wrap gap-2">
-              {[
-                "Pollock 3",
-                "Pollock 7",
-                "Petroski",
-                "Guedes",
-                "Durnin",
-                "Faulkner",
-                "Nenhum",
-              ].map((prot) => (
-                <Button
-                  key={prot}
-                  variant={
-                    protocoloDobras === prot ? "default" : "outline"
-                  }
-                  onClick={() => setProtocoloDobras(prot)}
-                >
-                  {prot}
+          <ThemeToggle />
+        </header>
+
+        {/* Main */}
+        <main className="flex-1 p-4 md:p-6">
+          <div className="max-w-4xl mx-auto w-full">
+            {/* Top actions */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <Button variant="outline" size="icon" asChild>
+                  <Link href="/pacientes">
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Voltar</span>
+                  </Link>
                 </Button>
-              ))}
-            </div>
 
-            {/* Sexo dentro do card */}
-            <div>
-              <Label>Sexo para cálculo</Label>
-              <Select
-                value={sexoAvaliacao}
-                onValueChange={setSexoAvaliacao}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Masculino">Masculino</SelectItem>
-                  <SelectItem value="Feminino">Feminino</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Inputs de dobras apenas do protocolo selecionado */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {getCamposDobras(protocoloDobras).map((campo) => (
-                <div key={campo.id}>
-                  <Label>{campo.label} (mm)</Label>
-                  <Input
-                    value={dobras[campo.id] || ""}
-                    onChange={(e) =>
-                      setDobras({
-                        ...dobras,
-                        [campo.id]: e.target.value,
-                      })
-                    }
-                    placeholder={`ex: ${campo.exemplo}`}
-                  />
+                <div className="flex items-center gap-2">
+                  <Switch id="patient-status" checked={isActive} onCheckedChange={togglePatientStatus} />
+                  <Label htmlFor="patient-status">{isActive ? "Paciente Ativo" : "Paciente Inativo"}</Label>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
 
-      {/* -------- BLOCO 3: BIOIMPEDÂNCIA -------- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Análises por bioimpedância</CardTitle>
-          <div className="flex items-center gap-4">
-            <Switch
-              checked={includeBio}
-              onCheckedChange={setIncludeBio}
-            />
-            <span>Incluir bioimpedância</span>
-          </div>
-        </CardHeader>
-        {includeBio && (
-          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div>
-              <Label>% Gordura</Label>
-              <Input
-                value={bioPercentGordura}
-                onChange={(e) => setBioPercentGordura(e.target.value)}
-                placeholder="Ex: 26.5"
-              />
-            </div>
-            <div>
-              <Label>% Massa Muscular</Label>
-              <Input
-                value={bioPercentMassaMuscular}
-                onChange={(e) =>
-                  setBioPercentMassaMuscular(e.target.value)
-                }
-                placeholder="Ex: 40.8"
-              />
-            </div>
-            <div>
-              <Label>Massa Muscular (kg)</Label>
-              <Input
-                value={bioMassaMuscular}
-                onChange={(e) => setBioMassaMuscular(e.target.value)}
-                placeholder="Ex: 27"
-              />
-            </div>
-            <div>
-              <Label>Massa de Gordura (kg)</Label>
-              <Input
-                value={bioMassaGordura}
-                onChange={(e) => setBioMassaGordura(e.target.value)}
-                placeholder="Ex: 18.6"
-              />
-            </div>
-            <div>
-              <Label>Massa Livre de Gordura (kg)</Label>
-              <Input
-                value={bioMassaLivre}
-                onChange={(e) => setBioMassaLivre(e.target.value)}
-                placeholder="Ex: 48.8"
-              />
-            </div>
-            <div>
-              <Label>Índice de Gordura Visceral</Label>
-              <Input
-                value={bioIGV}
-                onChange={(e) => setBioIGV(e.target.value)}
-                placeholder="Ex: 8"
-              />
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Botão de salvar */}
-      <div className="flex justify-end">
-        <Button onClick={salvarNovaMetrica}>Salvar Medição</Button>
-      </div>
-      {/* --------- GRÁFICO DE COMPOSIÇÃO (%) --------- */}
-      {isClient && metricas.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Composição corporal (%)</CardTitle>
-            <CardDescription>Percentual de massa gorda e massa livre ao longo do tempo</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mx-auto w-full max-w-4xl">
-              <div className="w-full" style={{ minWidth: 520, height: 320 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={metricas.map((m: any) => {
-                      const mgp =
-                        typeof m.massaGorduraPercent === "number"
-                          ? m.massaGorduraPercent
-                          : typeof m.gorduraPercentual === "number"
-                          ? m.gorduraPercentual
-                          : 0
-                      const mlgp = Math.max(0, 100 - (Number(mgp) || 0))
-                      return {
-                        data:
-                          m.data && !isNaN(new Date(m.data).getTime())
-                            ? new Date(m.data).toLocaleDateString("pt-BR").slice(0, 5)
-                            : m.data || "",
-                        massaGorda: Number(Number(mgp).toFixed(1)),
-                        massaLivre: Number(Number(mlgp).toFixed(1)),
-                      }
-                    })}
-                    margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="data" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="massaGorda" name="Massa gorda (%)" stackId="a" fill="#6366F1" />
-                    <Bar dataKey="massaLivre" name="Massa livre (%)" stackId="a" fill="#C7D2FE" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive hover:bg-muted"
+                      title="Excluir paciente"
+                    >
+                      <Trash className="h-5 w-5" />
+                      <span className="sr-only">Excluir paciente</span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Tem certeza que deseja excluir este paciente?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. Isso removerá permanentemente o paciente e todos os seus dados
+                        do Firestore.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeletePatient} className="bg-red-600 hover:bg-red-700 text-white">
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* --------- HISTÓRICO (3 BLOCOS) --------- */}
-      <div className="space-y-8">
-        {/* Bloco A: Análises básicas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico — Análises básicas</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            {metricas.length > 0 ? (
-              <table className="w-full text-sm text-left border">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="p-2 text-left">Métrica</th>
-                    {metricas.map((m: any, i: number) => (
-                      <th key={i} className="p-2 text-center">
-                        {m.data && !isNaN(new Date(m.data).getTime())
-                          ? new Date(m.data).toLocaleDateString("pt-BR")
-                          : "Sem data"}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { k: "peso", label: "Peso (kg)" },
-                    { k: "altura", label: "Altura (cm)" },
-                    { k: "cintura", label: "Cintura (cm)" },
-                    { k: "quadril", label: "Quadril (cm)" },
-                    { k: "braco", label: "Braço (cm)" },
-                    { k: "imc", label: "IMC (kg/m²)" },
-                    { k: "rcq", label: "RCQ" },
-                    { k: "cmb", label: "CMB (cm)" },
-                  ].map((row) => (
-                    <tr key={row.k} className="border-b hover:bg-muted/40">
-                      <td className="p-2 font-medium">{row.label}</td>
-                      {metricas.map((m: any, i: number) => (
-                        <td key={i} className="p-2 text-center">
-                          {m[row.k] === 0 || m[row.k] == null || m[row.k] === "" ? "-" : m[row.k]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sem registros.</p>
-            )}
-          </CardContent>
-        </Card>
+            {/* Cartão: Informações Pessoais */}
+            <Card className="mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Informações Pessoais</CardTitle>
+                </div>
+                <Button onClick={() => setEditInfoOpen(true)} className="bg-indigo-600 text-white hover:bg-indigo-700">
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Nome</p>
+                  <p>{patient?.nome || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Email</p>
+                  <p>{patient?.email || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+                  <p>{patient?.telefone ? formatTelefone(patient.telefone) : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Data de Nascimento</p>
+                  <p>
+                    {patient?.birthdate
+                      ? new Date(patient.birthdate + "T12:00:00").toLocaleDateString("pt-BR")
+                      : "-"}
+                  </p>
+                </div>
+                {patient?.senhaProvisoria && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+                      Senha Provisória
+                      <button
+                        type="button"
+                        onClick={() => setMostrarSenha((prev) => !prev)}
+                        className="text-indigo-600 text-xs"
+                      >
+                        {mostrarSenha ? "Ocultar" : "Mostrar"}
+                      </button>
+                    </p>
+                    <p className="font-mono text-sm">{mostrarSenha ? patient.senhaProvisoria : "••••••••"}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Bloco B: Bioimpedância */}
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>Histórico — Bioimpedância</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            {metricas.some((m: any) => !!m.bio) ? (
-              <table className="w-full text-sm text-left border">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="p-2 text-left">Indicador</th>
-                    {metricas.map((m: any, i: number) => (
-                      <th key={i} className="p-2 text-center">
-                        {m.data && !isNaN(new Date(m.data).getTime())
-                          ? new Date(m.data).toLocaleDateString("pt-BR")
-                          : "Sem data"}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { k: "percentGordura", label: "% Gordura" },
-                    { k: "percentMassaMuscular", label: "% Massa Muscular" },
-                    { k: "massaMuscular", label: "Massa Muscular (kg)" },
-                    { k: "massaGordura", label: "Massa de Gordura (kg)" },
-                    { k: "massaLivre", label: "Massa Livre (kg)" },
-                    { k: "igv", label: "Índice de Gordura Visceral" },
-                  ].map((row) => (
-                    <tr key={row.k} className="border-b hover:bg-muted/40">
-                      <td className="p-2 font-medium">{row.label}</td>
-                      {metricas.map((m: any, i: number) => (
-                        <td key={i} className="p-2 text-center">
-                          {m?.bio?.[row.k] === 0 || m?.bio?.[row.k] == null || m?.bio?.[row.k] === ""
-                            ? "-"
-                            : m.bio[row.k]}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sem registros de bioimpedância.</p>
-            )}
-          </CardContent>
-        </Card>
+            {/* Modal Editar Informações */}
+            <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Informações Pessoais</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid gap-1">
+                    <Label>Nome</Label>
+                    <Input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Email</Label>
+                    <Input value={patient?.email || ""} disabled className="opacity-60 cursor-not-allowed" />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Telefone</Label>
+                    <Input
+                      value={editData.telefone}
+                      onChange={(e) => {
+                        const onlyNumbers = e.target.value.replace(/\D/g, "").slice(0, 11)
+                        const match = onlyNumbers.match(/^(\d{2})(\d{5})(\d{4})$/)
+                        const formatted = match ? `(${match[1]}) ${match[2]}-${match[3]}` : onlyNumbers
+                        setEditData({ ...editData, telefone: formatted })
+                      }}
+                      placeholder="(99) 99999-9999"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>Data de Nascimento</Label>
+                    <Input type="date" value={editData.birthdate} onChange={(e) => setEditData({ ...editData, birthdate: e.target.value })} />
+                  </div>
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      setIsSaving(true)
+                      await handleSaveInfo()
+                      setIsSaving(false)
+                    }}
+                    disabled={isSaving}
+                    className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  >
+                    {isSaving ? "Salvando..." : "Salvar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-        {/* Bloco C: Antropometria (Dobras) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico — Medidas antropométricas</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            {metricas.some((m: any) => !!m.antrop) ? (
-              <>
-                {/* Tabela 1: protocolo/sexo/somatório/densidade/%gordura */}
-                <table className="w-full text-sm text-left border mb-6">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="p-2 text-left">Indicador</th>
-                      {metricas.map((m: any, i: number) => (
-                        <th key={i} className="p-2 text-center">
-                          {m.data && !isNaN(new Date(m.data).getTime())
-                            ? new Date(m.data).toLocaleDateString("pt-BR")
-                            : "Sem data"}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { k: "protocolo", label: "Protocolo" },
-                      { k: "sexo", label: "Sexo (cálculo)" },
-                      { k: "somatorioDobras", label: "Somatório de Dobras (mm)" },
-                      { k: "densidadeCorporal", label: "Densidade Corporal (g/mL)" },
-                      { k: "gorduraPercentual", label: "% Gordura (Siri)" },
-                      { k: "massaGorduraPercent", label: "% Massa gorda" },
-                      { k: "massaLivreGorduraPercent", label: "% Massa livre" },
-                      { k: "massaGordura", label: "Massa de Gordura (kg)" },
-                      { k: "massaLivreGordura", label: "Massa Livre (kg)" },
-                      { k: "massaResidual", label: "Massa Residual (kg)" },
-                    ].map((row) => (
-                      <tr key={row.k} className="border-b hover:bg-muted/40">
-                        <td className="p-2 font-medium">{row.label}</td>
-                        {metricas.map((m: any, i: number) => (
-                          <td key={i} className="p-2 text-center">
-                            {m?.antrop?.[row.k] === 0 || m?.antrop?.[row.k] == null || m?.antrop?.[row.k] === ""
-                              ? "-"
-                              : m.antrop[row.k]}
-                          </td>
+            {/* ===== Tabs: Métricas / Dietas / Fotos / Material Individual ===== */}
+            <Tabs defaultValue="metricas" className="w-full mt-6">
+              <TabsList className="grid w-full grid-cols-4 md:w-[600px]">
+                <TabsTrigger value="metricas">Métricas</TabsTrigger>
+                <TabsTrigger value="dietas">Dietas</TabsTrigger>
+                <TabsTrigger value="fotos">Fotos</TabsTrigger>
+                <TabsTrigger value="material-individual">Material Individual</TabsTrigger>
+              </TabsList>
+
+              {/* ====================== ABA: DIETAS ====================== */}
+              <TabsContent value="dietas" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Nova Dieta</CardTitle>
+                    <CardDescription>Faça upload de dietas em PDF para o paciente</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleReplaceDiet}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        <div className="grid gap-2">
+                          <Label>Nome da Dieta</Label>
+                          <Input
+                            placeholder="Ex: Dieta de Emagrecimento - Agosto 2025"
+                            value={nomeDieta}
+                            onChange={(e) => setNomeDieta(e.target.value)}
+                          />
+                          {erroNomeDieta && (
+                            <p className="text-sm text-red-600 mt-1">
+                              Por favor, insira o nome da dieta antes de enviar.
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Arquivo PDF</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="pdf-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">
+                                  Clique para fazer upload ou arraste o arquivo
+                                </p>
+                                <p className="text-xs text-muted-foreground">PDF (Máx 10MB)</p>
+                              </div>
+                              <input
+                                id="pdf-upload"
+                                type="file"
+                                accept=".pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) setSelectedPDF(file)
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {selectedPDF && <p className="text-sm text-green-600">{selectedPDF.name}</p>}
+
+                        <div className="flex justify-center mt-4">
+                          <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                            <Button
+                              type="submit"
+                              className={`w-full text-white ${submitButtonColorClass}`}
+                              disabled={!selectedPDF || isSubmittingDiet}
+                            >
+                              {submitButtonText}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {patient?.dietas?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Dietas Enviadas</CardTitle>
+                      <CardDescription>Visualize as dietas já enviadas para este paciente.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4">
+                        {patient.dietas.map((dieta: any, index: number) => {
+                          const isUltima = index === patient.dietas.length - 1
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-4 rounded-lg border"
+                            >
+                              <div className="flex items-center gap-4">
+                                <FileText className="h-5 w-5 text-indigo-600" />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{dieta.nomeDieta || dieta.nome}</p>
+                                    {isUltima && (
+                                      <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 border border-green-200">
+                                        visível para o paciente
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Enviado em: {dieta.dataEnvio}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 items-center">
+                                <Link href={dieta.url} target="_blank" rel="noopener noreferrer">
+                                  <Button variant="outline" size="sm">
+                                    Visualizar
+                                  </Button>
+                                </Link>
+
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-muted-foreground hover:text-red-600"
+                                      title="Excluir dieta"
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Excluir Dieta</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja excluir a dieta{" "}
+                                        <strong>{dieta.nomeDieta || dieta.nome}</strong>?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteDiet(dieta)}
+                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                      >
+                                        Excluir
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ====================== ABA: FOTOS ====================== */}
+              <TabsContent value="fotos" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Foto</CardTitle>
+                    <CardDescription>Envie 1 foto por vez, selecionando o tipo</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleUploadPhotos}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        <div className="grid gap-2">
+                          <Label>Tipo da Foto</Label>
+                          <select
+                            value={tipoFoto}
+                            onChange={(e) => setTipoFoto(e.target.value)}
+                            className="border rounded p-2 bg-background"
+                          >
+                            <option value="Foto Frontal">Frontal</option>
+                            <option value="Lateral Direita">Lateral Direita</option>
+                            <option value="Lateral Esquerda">Lateral Esquerda</option>
+                            <option value="Costas">Costas</option>
+                          </select>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label>Foto</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="photo-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">Clique para selecionar a foto</p>
+                                <p className="text-xs text-muted-foreground">JPG, PNG (Máx 5MB)</p>
+                              </div>
+                              <input
+                                id="photo-upload"
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handlePhotoChange}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-center mt-2">
+                          <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                            Enviar Foto
+                          </Button>
+                        </div>
+
+                        {selectedPhoto && (
+                          <p className="text-sm text-green-600">{selectedPhoto.name}</p>
+                        )}
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {patient?.fotos?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Histórico de Fotos</CardTitle>
+                      <CardDescription>Visualize e gerencie as fotos do paciente.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {patient.fotos.map((foto: any, index: number) => (
+                          <div key={index} className="border rounded-lg p-4 relative">
+                            <div className="flex justify-between items-center mb-2">
+                              <p className="text-sm font-medium">{foto.tipo}</p>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button
+                                    className="text-muted-foreground hover:text-red-600"
+                                    title="Excluir foto"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir Foto</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir esta foto?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeletePhoto(foto)}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2">
+                              Enviado em: {foto.dataEnvio}
+                            </p>
+                            {foto.url ? (
+                              <Image
+                                src={foto.url}
+                                alt={foto.tipo}
+                                width={600}
+                                height={600}
+                                className="rounded-md object-cover w-full h-auto"
+                              />
+                            ) : null}
+                          </div>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
 
-                {/* Tabela 2: dobras por ponto (mostra só os que existem na medição) */}
-                <table className="w-full text-sm text-left border">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="p-2 text-left">Ponto de dobra (mm)</th>
-                      {metricas.map((m: any, i: number) => (
-                        <th key={i} className="p-2 text-center">
-                          {m.data && !isNaN(new Date(m.data).getTime())
-                            ? new Date(m.data).toLocaleDateString("pt-BR")
-                            : "Sem data"}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["peitoral", "Peitoral"],
-                      ["abdominal", "Abdominal"],
-                      ["coxa", "Coxa"],
-                      ["tricipital", "Tricipital"],
-                      ["suprailiaca", "Supra-ilíaca"],
-                      ["axilarMedia", "Axilar média"],
-                      ["subescapular", "Subescapular"],
-                    ].map(([k, label]) => (
-                      <tr key={k} className="border-b hover:bg-muted/40">
-                        <td className="p-2 font-medium">{label}</td>
-                        {metricas.map((m: any, i: number) => (
-                          <td key={i} className="p-2 text-center">
-                            {m?.antrop?.dobras?.[k] === 0 ||
-                            m?.antrop?.dobras?.[k] == null ||
-                            m?.antrop?.dobras?.[k] === ""
-                              ? "-"
-                              : m.antrop.dobras[k]}
-                          </td>
+              {/* ====================== ABA: MATERIAL INDIVIDUAL ====================== */}
+              <TabsContent value="material-individual" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Enviar Material Individual</CardTitle>
+                    <CardDescription>Faça upload de PDFs específicos para este paciente.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleUploadIndividualMaterial}>
+                      <div className="flex flex-col gap-4 max-w-xl mx-auto">
+                        <div className="grid gap-2">
+                          <Label>Nome do Material</Label>
+                          <Input
+                            placeholder="Ex: Exercícios para Casa - Semana 1"
+                            value={nomeMaterialIndividual}
+                            onChange={(e) => setNomeMaterialIndividual(e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Arquivo PDF</Label>
+                          <div className="flex items-center justify-center w-full">
+                            <label
+                              htmlFor="individual-pdf-upload"
+                              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted hover:bg-muted/80"
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground">
+                                  Clique para fazer upload ou arraste o arquivo
+                                </p>
+                                <p className="text-xs text-muted-foreground">PDF (Máx 10MB)</p>
+                              </div>
+                              <input
+                                id="individual-pdf-upload"
+                                type="file"
+                                accept=".pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) setSelectedIndividualPDF(file)
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {selectedIndividualPDF && (
+                          <p className="text-sm text-green-600">{selectedIndividualPDF.name}</p>
+                        )}
+
+                        <div className="flex justify-center mt-4">
+                          <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                            <Button
+                              type="submit"
+                              className={`w-full text-white ${submitIndividualMaterialColorClass}`}
+                              disabled={!selectedIndividualPDF || isSubmittingIndividualMaterial}
+                            >
+                              {submitIndividualMaterialText}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {patient?.materiaisIndividuais?.length > 0 && (
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Materiais Individuais Enviados</CardTitle>
+                      <CardDescription>
+                        Visualize e gerencie os materiais enviados para este paciente.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4">
+                        {patient.materiaisIndividuais.map((material: any, index: number) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-4 rounded-lg border"
+                          >
+                            <div className="flex items-center gap-4">
+                              <FileText className="h-5 w-5 text-indigo-600" />
+                              <div>
+                                <p className="font-medium">{material.nomeMaterial || material.nome}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Enviado em: {material.dataEnvio}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 items-center">
+                              <Link href={material.url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline" size="sm">
+                                  Visualizar
+                                </Button>
+                              </Link>
+
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-muted-foreground hover:text-red-600"
+                                    title="Excluir material"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir Material</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir o material{" "}
+                                      <strong>{material.nomeMaterial || material.nome}</strong>?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteIndividualMaterial(material)}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sem registros de antropometria.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
 
-/* =========================== HELPERS (PARTE 4) =========================== */
+              {/* >>> A ABA "MÉTRICAS" VEM NA PARTE 3/4 <<< */}
+              {/* ====================== ABA: MÉTRICAS ====================== */}
+              <TabsContent value="metricas" className="mt-4">
+                {/* --------- Histórico (separado em 3 blocos como a foto) --------- */}
+                <div className="space-y-8 mb-8">
+                  {/* Bloco A — Análises básicas */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Histórico — Análises básicas</CardTitle>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto">
+                      {metricas.length > 0 ? (
+                        <table className="w-full text-sm text-left border">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="p-2 text-left">Métrica</th>
+                              {metricas.map((m: any, i: number) => (
+                                <th key={i} className="p-2 text-center">
+                                  {m.data && !isNaN(new Date(m.data).getTime())
+                                    ? new Date(m.data).toLocaleDateString("pt-BR")
+                                    : "Sem data"}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { k: "peso", label: "Peso (kg)" },
+                              { k: "altura", label: "Altura (cm)" },
+                              { k: "cintura", label: "Cintura (cm)" },
+                              { k: "quadril", label: "Quadril (cm)" },
+                              { k: "braco", label: "Braço (cm)" },
+                              { k: "imc", label: "IMC (kg/m²)" },
+                              { k: "rcq", label: "RCQ" },
+                              { k: "cmb", label: "CMB (cm)" },
+                            ].map((row) => (
+                              <tr key={row.k} className="border-b hover:bg-muted/40">
+                                <td className="p-2 font-medium">{row.label}</td>
+                                {metricas.map((m: any, i: number) => (
+                                  <td key={i} className="p-2 text-center">
+                                    {m[row.k] === 0 || m[row.k] == null || m[row.k] === "" ? "-" : m[row.k]}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Sem registros.</p>
+                      )}
+                    </CardContent>
+                  </Card>
 
-/** Retorna os campos de dobras por protocolo */
-function getCamposDobras(protocolo: string) {
-  switch (protocolo) {
-    case "Pollock 3":
-      return [
-        { id: "coxa", label: "Coxa", exemplo: "18" },
-        { id: "peitoral", label: "Peitoral (♂)", exemplo: "10", only: "M" },
-        { id: "abdominal", label: "Abdominal (♂)", exemplo: "20", only: "M" },
-        { id: "tricipital", label: "Tricipital (♀)", exemplo: "18", only: "F" },
-        { id: "suprailiaca", label: "Supra-ilíaca (♀)", exemplo: "16", only: "F" },
-      ]
-    case "Pollock 7":
-      return [
-        { id: "peitoral", label: "Peitoral", exemplo: "10" },
-        { id: "axilarMedia", label: "Axilar média", exemplo: "12" },
-        { id: "tricipital", label: "Tricipital", exemplo: "18" },
-        { id: "subescapular", label: "Subescapular", exemplo: "14" },
-        { id: "abdominal", label: "Abdominal", exemplo: "20" },
-        { id: "suprailiaca", label: "Supra-ilíaca", exemplo: "16" },
-        { id: "coxa", label: "Coxa", exemplo: "18" },
-      ]
-    case "Petroski":
-      // Ex.: tricipital + subescapular + suprailíaca + panturrilha medial (adaptado sem panturrilha)
-      return [
-        { id: "tricipital", label: "Tricipital", exemplo: "18" },
-        { id: "subescapular", label: "Subescapular", exemplo: "14" },
-        { id: "suprailiaca", label: "Supra-ilíaca", exemplo: "16" },
-        { id: "coxa", label: "Coxa", exemplo: "18" },
-      ]
-    case "Guedes":
-      // Ex.: tricipital + subescapular + suprailíaca + coxa
-      return [
-        { id: "tricipital", label: "Tricipital", exemplo: "18" },
-        { id: "subescapular", label: "Subescapular", exemplo: "14" },
-        { id: "suprailiaca", label: "Supra-ilíaca", exemplo: "16" },
-        { id: "coxa", label: "Coxa", exemplo: "18" },
-      ]
-    case "Durnin":
-      // Ex.: bíceps + tríceps + subescapular + suprailíaca (usando tricipital no lugar de bíceps para simplificar UI)
-      return [
-        { id: "tricipital", label: "Tricipital", exemplo: "18" },
-        { id: "subescapular", label: "Subescapular", exemplo: "14" },
-        { id: "suprailiaca", label: "Supra-ilíaca", exemplo: "16" },
-        { id: "peitoral", label: "Peitoral", exemplo: "10" },
-      ]
-    case "Faulkner":
-      // Ex.: tríceps + subescapular + supra-ilíaca + abdome (variação)
-      return [
-        { id: "tricipital", label: "Tricipital", exemplo: "18" },
-        { id: "subescapular", label: "Subescapular", exemplo: "14" },
-        { id: "suprailiaca", label: "Supra-ilíaca", exemplo: "16" },
-        { id: "abdominal", label: "Abdominal", exemplo: "20" },
-      ]
-    default:
-      return []
-  }
-}
+                  {/* Bloco B — Bioimpedância */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Histórico — Análises por bioimpedância</CardTitle>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto">
+                      {metricas.some((m: any) =>
+                        m.gorduraPercentual != null ||
+                        m.massaGordura != null ||
+                        m.massaLivreGordura != null
+                      ) ? (
+                        <table className="w-full text-sm text-left border">
+                          <thead className="bg-muted">
+                            <tr>
+                              <th className="p-2 text-left">Indicador</th>
+                              {metricas.map((m: any, i: number) => (
+                                <th key={i} className="p-2 text-center">
+                                  {m.data && !isNaN(new Date(m.data).getTime())
+                                    ? new Date(m.data).toLocaleDateString("pt-BR")
+                                    : "Sem data"}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { k: "gorduraPercentual", label: "% Gordura" },
+                              { k: "massaGordura", label: "Massa de Gordura (kg)" },
+                              { k: "massaLivreGordura", label: "Massa Livre (kg)" },
+                              { k: "massaGorduraPercent", label: "% Massa gorda" },
+                              { k: "massaLivreGorduraPercent", label: "% Massa livre" },
+                            ].map((row) => (
+                              <tr key={row.k} className="border-b hover:bg-muted/40">
+                                <td className="p-2 font-medium">{row.label}</td>
+                                {metricas.map((m: any, i: number) => (
+                                  <td key={i} className="p-2 text-center">
+                                    {m?.[row.k] === 0 || m?.[row.k] == null || m?.[row.k] === "" ? "-" : m[row.k]}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Sem registros de bioimpedância.</p>
+                      )}
+                    </CardContent>
+                  </Card>
 
-/** Normaliza as dobras para salvar/mostrar */
-function buildAntropometriaPayload({
-  protocolo,
-  sexo,
-  dobras,
-  peso,
-  idade,
-}: {
-  protocolo: string
-  sexo: string
-  dobras: Record<string, string>
-  peso: number
-  idade: number
-}) {
-  // soma conforme protocolos mais usados (quando aplicável)
-  const n = (v?: string) => (v && v.trim() !== "" ? Number(v.replace(",", ".")) : 0)
+                  {/* Bloco C — Medidas antropométricas */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Histórico — Medidas antropométricas</CardTitle>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto">
+                      {metricas.some((m: any) =>
+                        m.somatorioDobras != null || m.densidadeCorporal != null
+                      ) ? (
+                        <>
+                          <table className="w-full text-sm text-left border mb-6">
+                            <thead className="bg-muted">
+                              <tr>
+                                <th className="p-2 text-left">Indicador</th>
+                                {metricas.map((m: any, i: number) => (
+                                  <th key={i} className="p-2 text-center">
+                                    {m.data && !isNaN(new Date(m.data).getTime())
+                                      ? new Date(m.data).toLocaleDateString("pt-BR")
+                                      : "Sem data"}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[
+                                { k: "somatorioDobras", label: "Somatório de Dobras (mm)" },
+                                { k: "densidadeCorporal", label: "Densidade Corporal (g/mL)" },
+                              ].map((row) => (
+                                <tr key={row.k} className="border-b hover:bg-muted/40">
+                                  <td className="p-2 font-medium">{row.label}</td>
+                                  {metricas.map((m: any, i: number) => (
+                                    <td key={i} className="p-2 text-center">
+                                      {m?.[row.k] === 0 || m?.[row.k] == null || m?.[row.k] === "" ? "-" : m[row.k]}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Sem registros de antropometria.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* --------- Gráfico empilhado (ajustado p/ 1 medição e largura limitada) --------- */}
+                {isClient && metricas.length > 0 && (
+                  <Card className="mb-8">
+                    <CardHeader>
+                      <CardTitle>Composição corporal (%)</CardTitle>
+                      <CardDescription>Percentual de massa gorda e massa livre ao longo do tempo</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {/* limita a largura p/ evitar gráfico achatado; centraliza e dá minWidth p/ 1 ponto */}
+                      <div className="mx-auto w-full max-w-[720px]">
+                        <div className="w-full" style={{ minWidth: 520, height: 320 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={metricas.map((m: any) => {
+                                const mgp =
+                                  typeof m.massaGorduraPercent === "number"
+                                    ? m.massaGorduraPercent
+                                    : typeof m.gorduraPercentual === "number"
+                                    ? m.gorduraPercentual
+                                    : 0
+                                const mlgp = Math.max(0, 100 - (Number(mgp) || 0))
+                                return {
+                                  data:
+                                    m.data && !isNaN(new Date(m.data).getTime())
+                                      ? new Date(m.data).toLocaleDateString("pt-BR").slice(0, 5)
+                                      : m.data || "",
+                                  massaGorda: Number(Number(mgp).toFixed(1)),
+                                  massaLivre: Number(Number(mlgp).toFixed(1)),
+                                }
+                              })}
+                              margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                              barCategoryGap={metricas.length === 1 ? "40%" : "20%"}
+                              barGap={metricas.length === 1 ? 8 : 2}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="data" />
+                              <YAxis domain={[0, 100]} />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="massaGorda" name="Massa gorda (%)" stackId="a" fill="#6366F1" />
+                              <Bar dataKey="massaLivre" name="Massa livre (%)" stackId="a" fill="#C7D2FE" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* --------- Nova Medição (apenas inputs + switches; sem “calculado” visível) --------- */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Nova Medição</CardTitle>
+                    <CardDescription>Separe por blocos e ative apenas o que deseja incluir.</CardDescription>
+                  </CardHeader>
+
+                  <CardContent>
+                    {/* Switches para incluir seções */}
+                    <div className="flex flex-wrap items-center gap-6 mb-6">
+                      <div className="flex items-center gap-2">
+                        <Switch id="sw-antrop" checked={true} onCheckedChange={(v)=>{ /* visual apenas; antrop aparece abaixo */ }} disabled />
+                        <Label htmlFor="sw-antrop">Análises básicas</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch id="sw-bio" checked={gorduraPercentualNovoInput !== ""} onCheckedChange={(v)=>{
+                          if (!v) setGorduraPercentualNovoInput("")
+                        }}/>
+                        <Label htmlFor="sw-bio">Bioimpedância</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch id="sw-dobras" checked={protocoloDobras !== "nenhum"} onCheckedChange={(v)=>{
+                          if (!v) setProtocoloDobras("nenhum")
+                          if (v && protocoloDobras === "nenhum") setProtocoloDobras("pollock3")
+                        }}/>
+                        <Label htmlFor="sw-dobras">Antropometria (dobras)</Label>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-3">
+                      {/* ======= Bloco 1: Análises básicas (inputs) ======= */}
+                      <section className="space-y-4">
+                        <div className="rounded-lg border p-3 space-y-3">
+                          <div className="grid gap-2">
+                            <Label>Data da Medição</Label>
+                            <Input type="date" value={dataNovaMetrica} onChange={(e) => setDataNovaMetrica(e.target.value)} />
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                              <Label>Peso (kg)</Label>
+                              <Input value={pesoNovo} onChange={(e) => setPesoNovo(e.target.value)} placeholder="70,5" />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Altura (cm)</Label>
+                              <Input value={alturaNova} onChange={(e) => setAlturaNova(e.target.value)} placeholder="170" />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Cintura (cm)</Label>
+                              <Input value={cinturaNovo} onChange={(e) => setCinturaNovo(e.target.value)} placeholder="82" />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Quadril (cm)</Label>
+                              <Input value={quadrilNovo} onChange={(e) => setQuadrilNovo(e.target.value)} placeholder="95" />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Braço (cm)</Label>
+                              <Input value={bracoNovo} onChange={(e) => setBracoNovo(e.target.value)} placeholder="30" />
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+
+                      {/* ======= Bloco 2: Dobras (protocolos em linha + sexo no card) ======= */}
+                      <section className="space-y-4">
+                        <div className="rounded-lg border p-3 space-y-4">
+                          {/* Botões dos protocolos */}
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { id: "pollock3", label: "Pollock 3" },
+                              { id: "pollock7", label: "Pollock 7" },
+                              { id: "petroski", label: "Petroski" },
+                              { id: "guedes", label: "Guedes" },
+                              { id: "durnin", label: "Durnin" },
+                              { id: "faulkner", label: "Faulkner" },
+                              { id: "nenhum", label: "Nenhum" },
+                            ].map((p) => (
+                              <Button
+                                key={p.id}
+                                variant={protocoloDobras === p.id ? "default" : "outline"}
+                                onClick={() => setProtocoloDobras(p.id as any)}
+                                size="sm"
+                              >
+                                {p.label}
+                              </Button>
+                            ))}
+                          </div>
+
+                          {/* Sexo dentro do card */}
+                          {protocoloDobras !== "nenhum" && (
+                            <div className="grid gap-1">
+                              <Label>Sexo para cálculo</Label>
+                              <select
+                                className="border rounded p-2 bg-background"
+                                value={sexoAvaliacao}
+                                onChange={(e) => setSexoAvaliacao(e.target.value)}
+                              >
+                                <option value="feminino">Feminino</option>
+                                <option value="masculino">Masculino</option>
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Campos de dobras conforme protocolo (apenas inputs; nada “calculado” visível) */}
+                          {(() => {
+                            if (protocoloDobras === "nenhum") return null
+
+                            // Campos por protocolo:
+                            const campos =
+                              protocoloDobras === "pollock3"
+                                ? (sexoAvaliacao || "").toLowerCase().startsWith("m")
+                                  ? [
+                                      { id: "peitoral", label: "Peitoral (mm)", state: [dobraPeitoral, setDobraPeitoral] },
+                                      { id: "abdominal", label: "Abdominal (mm)", state: [dobraAbdominal, setDobraAbdominal] },
+                                      { id: "coxa", label: "Coxa (mm)", state: [dobraCoxa, setDobraCoxa] },
+                                    ]
+                                  : [
+                                      { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                      { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                      { id: "coxa", label: "Coxa (mm)", state: [dobraCoxa, setDobraCoxa] },
+                                    ]
+                                : protocoloDobras === "pollock7"
+                                ? [
+                                    { id: "peitoral", label: "Peitoral (mm)", state: [dobraPeitoral, setDobraPeitoral] },
+                                    { id: "axilarMedia", label: "Axilar média (mm)", state: [dobraAxilarMedia, setDobraAxilarMedia] },
+                                    { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                    { id: "subescapular", label: "Subescapular (mm)", state: [dobraSubescapular, setDobraSubescapular] },
+                                    { id: "abdominal", label: "Abdominal (mm)", state: [dobraAbdominal, setDobraAbdominal] },
+                                    { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                    { id: "coxa", label: "Coxa (mm)", state: [dobraCoxa, setDobraCoxa] },
+                                  ]
+                                : protocoloDobras === "petroski"
+                                ? [
+                                    { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                    { id: "subescapular", label: "Subescapular (mm)", state: [dobraSubescapular, setDobraSubescapular] },
+                                    { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                    { id: "coxa", label: "Coxa (mm)", state: [dobraCoxa, setDobraCoxa] },
+                                  ]
+                                : protocoloDobras === "guedes"
+                                ? [
+                                    { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                    { id: "subescapular", label: "Subescapular (mm)", state: [dobraSubescapular, setDobraSubescapular] },
+                                    { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                    { id: "coxa", label: "Coxa (mm)", state: [dobraCoxa, setDobraCoxa] },
+                                  ]
+                                : protocoloDobras === "durnin"
+                                ? [
+                                    { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                    { id: "bicipital", label: "Bicipital (mm)", state: [dobraPeitoral, setDobraPeitoral] }, // reaproveitando estado
+                                    { id: "subescapular", label: "Subescapular (mm)", state: [dobraSubescapular, setDobraSubescapular] },
+                                    { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                  ]
+                                : /* faulkner */
+                                  [
+                                    { id: "tricipital", label: "Tricipital (mm)", state: [dobraTricipital, setDobraTricipital] },
+                                    { id: "subescapular", label: "Subescapular (mm)", state: [dobraSubescapular, setDobraSubescapular] },
+                                    { id: "suprailiaca", label: "Supra-ilíaca (mm)", state: [dobraSupraIliaca, setDobraSupraIliaca] },
+                                    { id: "abdominal", label: "Abdominal (mm)", state: [dobraAbdominal, setDobraAbdominal] },
+                                  ]
+
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {campos.map((c) => (
+                                  <div key={c.id} className="grid gap-1">
+                                    <Label>{c.label}</Label>
+                                    <Input
+                                      value={c.state[0] as string}
+                                      onChange={(e) => (c.state[1] as any)(e.target.value)}
+                                      placeholder="ex: 18"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </section>
+
+                      {/* ======= Bloco 3: Bioimpedância (inputs) ======= */}
+                      <section className="space-y-4">
+                        <div className="rounded-lg border p-3 grid gap-3">
+                          <div className="grid gap-1">
+                            <Label>% Gordura</Label>
+                            <Input
+                              value={gorduraPercentualNovoInput}
+                              onChange={(e) => setGorduraPercentualNovoInput(e.target.value)}
+                              placeholder="Ex: 26.5"
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label>Massa de Gordura (kg)</Label>
+                            <Input
+                              value={massaGorduraNovo}
+                              onChange={(e) => setMassaGorduraNovo(e.target.value)}
+                              placeholder="Ex: 18.6"
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label>Massa Livre (kg)</Label>
+                            <Input
+                              value={massaLivreGorduraNovo}
+                              onChange={(e) => setMassaLivreGorduraNovo(e.target.value)}
+                              placeholder="Ex: 48.8"
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label>% Massa gorda</Label>
+                            <Input
+                              value={massaGorduraPercentNovo}
+                              onChange={(e) => setMassaGorduraPercentNovo(e.target.value)}
+                              placeholder="Ex: 28,0"
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label>% Massa livre</Label>
+                            <Input
+                              value={massaLivreGorduraPercentNovo}
+                              onChange={(e) => setMassaLivreGorduraPercentNovo(e.target.value)}
+                              placeholder="Ex: 72,0"
+                            />
+                          </div>
+                        </div>
+                      </section>
+
+                      {/* Botão Salvar (linha inteira) */}
+                      <div className="lg:col-span-3 flex justify-center">
+                        <div className="w-full md:w-3/5 lg:w-1/2 xl:w-2/5">
+                          <Button
+                            onClick={async () => {
+                              if (!user?.email || !patient) return
+
+                              // ======= Cálculos internos (sem exibir campos "calculado") =======
+                              const peso = parseNumber(pesoNovo)
+                              const altura = parseNumber(alturaNova)
+                              const cintura = parseNumber(cinturaNovo)
+                              const quadril = parseNumber(quadrilNovo)
+                              const braco = parseNumber(bracoNovo)
+
+                              const imc = calculateIMC(peso, altura)
+                              const rcq = calculateRCQ(cintura, quadril)
+                              const cmb = calculateCMB(braco)
+
+                              // Antropometria – somatório e densidade por protocolo selecionado
+                              let somatorioDobrasCalc = 0
+                              let densidadeCalc = 0
+                              const n = (s: string) => (s && s.trim() !== "" ? Number(s.replace(",", ".")) : 0)
+                              if (protocoloDobras !== "nenhum") {
+                                if (protocoloDobras === "pollock3") {
+                                  const fem = (sexoAvaliacao || "").toLowerCase().startsWith("f")
+                                  somatorioDobrasCalc = fem
+                                    ? n(dobraTricipital) + n(dobraSupraIliaca) + n(dobraCoxa)
+                                    : n(dobraPeitoral) + n(dobraAbdominal) + n(dobraCoxa)
+                                  densidadeCalc = densidadePollock3(somatorioDobrasCalc, getIdade(), sexoAvaliacao)
+                                } else if (protocoloDobras === "pollock7") {
+                                  somatorioDobrasCalc =
+                                    n(dobraPeitoral) +
+                                    n(dobraAxilarMedia) +
+                                    n(dobraTricipital) +
+                                    n(dobraSubescapular) +
+                                    n(dobraAbdominal) +
+                                    n(dobraSupraIliaca) +
+                                    n(dobraCoxa)
+                                  densidadeCalc = densidadePollock7(somatorioDobrasCalc, getIdade(), sexoAvaliacao)
+                                } else if (protocoloDobras === "petroski") {
+                                  const sum = n(dobraTricipital) + n(dobraSubescapular) + n(dobraSupraIliaca) + n(dobraCoxa)
+                                  somatorioDobrasCalc = sum
+                                  // aproximação Petroski (log10 soma)
+                                  const fem = (sexoAvaliacao || "").toLowerCase().startsWith("f")
+                                  densidadeCalc = fem
+                                    ? 1.1954713 - 0.07513507 * Math.log10(sum || 1) - 0.00041072 * getIdade()
+                                    : 1.17136 - 0.06706 * Math.log10(sum || 1) - 0.000221 * getIdade()
+                                } else if (protocoloDobras === "guedes") {
+                                  const sum = n(dobraTricipital) + n(dobraSubescapular) + n(dobraSupraIliaca) + n(dobraCoxa)
+                                  somatorioDobrasCalc = sum
+                                  const fem = (sexoAvaliacao || "").toLowerCase().startsWith("f")
+                                  densidadeCalc = fem
+                                    ? 1.1714 - 0.0779 * Math.log10(sum || 1) - 0.00073 * getIdade()
+                                    : 1.17136 - 0.06706 * Math.log10(sum || 1) - 0.000221 * getIdade()
+                                } else if (protocoloDobras === "durnin") {
+                                  const sum = n(dobraTricipital) + n(dobraPeitoral) + n(dobraSubescapular) + n(dobraSupraIliaca)
+                                  somatorioDobrasCalc = sum
+                                  const L = Math.log10(sum || 1)
+                                  const fem = (sexoAvaliacao || "").toLowerCase().startsWith("f")
+                                  const set = (a: number, b: number) => a - b * L
+                                  if (fem) {
+                                    const idade = getIdade()
+                                    densidadeCalc =
+                                      idade < 17 ? set(1.1533, 0.0643)
+                                      : idade < 20 ? set(1.1369, 0.0598)
+                                      : idade < 30 ? set(1.1423, 0.0632)
+                                      : idade < 40 ? set(1.1333, 0.0612)
+                                      : idade < 50 ? set(1.1339, 0.0645)
+                                      : set(1.1109, 0.0621)
+                                  } else {
+                                    const idade = getIdade()
+                                    densidadeCalc =
+                                      idade < 17 ? set(1.1533, 0.0643)
+                                      : idade < 20 ? set(1.162, 0.063)
+                                      : idade < 30 ? set(1.1631, 0.0632)
+                                      : idade < 40 ? set(1.1422, 0.0544)
+                                      : idade < 50 ? set(1.162, 0.07)
+                                      : set(1.1715, 0.0779)
+                                  }
+                                } else if (protocoloDobras === "faulkner") {
+                                  const sum = n(dobraTricipital) + n(dobraSubescapular) + n(dobraSupraIliaca) + n(dobraAbdominal)
+                                  somatorioDobrasCalc = sum
+                                  const perc = 0.153 * sum + 5.783
+                                  densidadeCalc = perc ? 495 / (perc + 450) : 0
+                                }
+                              }
+
+                              // Bioimpedância / percentuais (se informados)
+                              const gPctManual = parseNumber(gorduraPercentualNovoInput)
+                              const mgManual = massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined
+                              const mlgManual = massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined
+                              const mgPercManual = massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined
+                              const mlgPercManual = massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined
+
+                              const nova: any = {
+                                data: dataNovaMetrica,
+                                peso,
+                                altura,
+                                cintura,
+                                quadril,
+                                braco,
+                                // básicos calculados (não exibidos como inputs)
+                                imc: imc || undefined,
+                                classificacaoImc: classifyIMC(imc) || undefined,
+                                rcq: rcq || undefined,
+                                riscoRcq: classifyRCQ(rcq, sexoAvaliacao) || undefined,
+                                cmb: cmb || undefined,
+                                classificacaoCmb: classifyCMB(cmb) || undefined,
+                                // antropometria
+                                somatorioDobras: somatorioDobrasCalc || undefined,
+                                densidadeCorporal: densidadeCalc || undefined,
+                                // bioimpedância/manuais
+                                gorduraPercentual: gPctManual || undefined,
+                                massaGordura: mgManual || undefined,
+                                massaLivreGordura: mlgManual || undefined,
+                                massaGorduraPercent: mgPercManual || (gPctManual ? gPctManual : undefined),
+                                massaLivreGorduraPercent:
+                                  mlgPercManual || (gPctManual ? Math.max(0, 100 - gPctManual) : undefined),
+                              }
+
+                              try {
+                                const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+                                const snap = await getDoc(refp)
+                                const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+                                const filtrado = hist.filter((m) => m.data !== nova.data)
+                                const atualizado = [...filtrado, nova].sort(
+                                  (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+                                )
+                                await updateDoc(refp, { historicoMetricas: atualizado })
+                                setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
+                                setMetricas(atualizado)
+                                toast({ title: "Nova métrica salva com sucesso!" })
+
+                                // limpa somente inputs
+                                setDataNovaMetrica("")
+                                setPesoNovo("")
+                                setAlturaNova("")
+                                setCinturaNovo("")
+                                setQuadrilNovo("")
+                                setBracoNovo("")
+                                setGorduraPercentualNovoInput("")
+                                setMassaGorduraNovo("")
+                                setMassaLivreGorduraNovo("")
+                                setMassaGorduraPercentNovo("")
+                                setMassaLivreGorduraPercentNovo("")
+                                setDobraPeitoral("")
+                                setDobraAbdominal("")
+                                setDobraCoxa("")
+                                setDobraTricipital("")
+                                setDobraSupraIliaca("")
+                                setDobraAxilarMedia("")
+                                setDobraSubescapular("")
+                              } catch (error) {
+                                console.error(error)
+                                toast({
+                                  title: "Erro ao salvar métrica",
+                                  description: "Verifique os campos e tente novamente.",
+                                  variant: "destructive",
+                                })
+                              }
+                            }}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            Salvar Medição
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+/* =========================== PARTE 4/4 — HELPERS EXTRAS =========================== */
+/* Estes helpers são opcionais, mas deixam o código mais organizado caso você
+   queira usar as fórmulas fora do handler de “Salvar Medição” no futuro. 
+   Podem ser colados logo após seus helpers existentes. */
+
+/** Siri: %G = 495/D − 450 (alias para manter semântica) */
+const siriPercent = (densidade: number) => (densidade ? 495 / densidade - 450 : 0)
+
+/** Jackson & Pollock 3 (já existente em cima — OK manter o seu) */
+// const densidadePollock3 = (...) => {...}
+/** Jackson & Pollock 7 (já existente em cima — OK manter o seu) */
+// const densidadePollock7 = (...) => {...}
+
+/** Petroski (7 dobras com log10 da soma) */
+function densidadePetroski7(sum: number, idade: number, sexo: string) {
   const fem = (sexo || "").toLowerCase().startsWith("f")
+  return fem
+    ? 1.1954713 - 0.07513507 * Math.log10(sum || 1) - 0.00041072 * idade
+    : 1.17136   - 0.06706    * Math.log10(sum || 1) - 0.000221   * idade
+}
 
-  let soma = 0
-  if (protocolo === "Pollock 3") {
-    soma = fem
-      ? n(dobras.tricipital) + n(dobras.suprailiaca) + n(dobras.coxa)
-      : n(dobras.peitoral) + n(dobras.abdominal) + n(dobras.coxa)
-  } else if (protocolo === "Pollock 7") {
-    soma =
-      n(dobras.peitoral) +
-      n(dobras.axilarMedia) +
-      n(dobras.tricipital) +
-      n(dobras.subescapular) +
-      n(dobras.abdominal) +
-      n(dobras.suprailiaca) +
-      n(dobras.coxa)
+/** Guedes (3–4 dobras com log10 da soma; aqui usamos tri+subesc+supra+coxa) */
+function densidadeGuedes(sum: number, idade: number, sexo: string) {
+  const fem = (sexo || "").toLowerCase().startsWith("f")
+  return fem
+    ? 1.1714  - 0.0779  * Math.log10(sum || 1) - 0.00073  * idade
+    : 1.17136 - 0.06706 * Math.log10(sum || 1) - 0.000221 * idade
+}
+
+/** Durnin & Womersley (4 dobras; usamos TRI + BIC (aprox) + SUBESC + SUPRA) */
+function densidadeDurnin(sum: number, idade: number, sexo: string) {
+  const L = Math.log10(sum || 1)
+  const set = (a: number, b: number) => a - b * L
+  const fem = (sexo || "").toLowerCase().startsWith("f")
+  if (fem) {
+    if (idade < 17) return set(1.1533, 0.0643)
+    if (idade < 20) return set(1.1369, 0.0598)
+    if (idade < 30) return set(1.1423, 0.0632)
+    if (idade < 40) return set(1.1333, 0.0612)
+    if (idade < 50) return set(1.1339, 0.0645)
+    return set(1.1109, 0.0621)
   } else {
-    // Outros protocolos: somatório simples dos campos presentes
-    soma = Object.values(dobras).reduce((acc, v) => acc + n(v), 0)
-  }
-
-  // densidade (reaproveitando suas funções da PARTE 1)
-  let dens = 0
-  if (protocolo === "Pollock 3") dens = densidadePollock3(soma, idade, sexo)
-  else if (protocolo === "Pollock 7") dens = densidadePollock7(soma, idade, sexo)
-  else dens = soma > 0 ? 1.1 - soma * 0.0005 - idade * 0.0002 : 0 // aproximação genérica p/ outros
-
-  const perc = dens ? siriPercentFat(dens) : 0
-  const massaGordura = peso && perc ? (perc / 100) * peso : 0
-  const massaLivreGordura = peso ? peso - massaGordura : 0
-  const massaResidual = peso ? peso * 0.207 : 0
-  const mgPercent = peso > 0 ? (massaGordura / peso) * 100 : 0
-  const mlgPercent = peso > 0 ? 100 - mgPercent : 0
-
-  return {
-    protocolo,
-    sexo,
-    dobras: Object.fromEntries(
-      Object.entries(dobras).map(([k, v]) => [k, v && v !== "" ? Number(v.replace(",", ".")) : undefined])
-    ),
-    somatorioDobras: soma || undefined,
-    densidadeCorporal: dens || undefined,
-    gorduraPercentual: perc || undefined,
-    massaGordura: massaGordura || undefined,
-    massaLivreGordura: massaLivreGordura || undefined,
-    massaResidual: massaResidual || undefined,
-    massaGorduraPercent: mgPercent || undefined,
-    massaLivreGorduraPercent: mlgPercent || undefined,
+    if (idade < 17) return set(1.1533, 0.0643)
+    if (idade < 20) return set(1.162,  0.063 )
+    if (idade < 30) return set(1.1631, 0.0632)
+    if (idade < 40) return set(1.1422, 0.0544)
+    if (idade < 50) return set(1.162,  0.07  )
+    return set(1.1715, 0.0779)
   }
 }
 
-/** Salva nova medição (substitui por data) */
-async function salvarNovaMetrica() {
-  if (!user?.email || !patient) return
-
-  const peso = parseNumber(pesoNovo)
-  const altura = parseNumber(alturaNova)
-  const cintura = parseNumber(cinturaNovo)
-  const quadril = parseNumber(quadrilNovo)
-  const braco = parseNumber(bracoNovo)
-
-  const imc = calculateIMC(peso, altura)
-  const rcq = calculateRCQ(cintura, quadril)
-  const cmb = calculateCMB(braco)
-
-  // payload base
-  const nova: any = {
-    data: dataNovaMetrica,
-    peso,
-    altura,
-    cintura,
-    quadril,
-    braco,
-    imc: imc || undefined,
-    rcq: rcq || undefined,
-    cmb: cmb || undefined,
-  }
-
-  // bioimpedância (opcional)
-  if (includeBio) {
-    nova.bio = {
-      percentGordura: parseNumber(bioPercentGordura),
-      percentMassaMuscular: parseNumber(bioPercentMassaMuscular),
-      massaMuscular: parseNumber(bioMassaMuscular),
-      massaGordura: parseNumber(bioMassaGordura),
-      massaLivre: parseNumber(bioMassaLivre),
-      igv: parseNumber(bioIGV),
-    }
-  }
-
-  // antropometria (opcional)
-  if (includeAntrop && protocoloDobras !== "Nenhum") {
-    const idade = getIdade()
-    nova.antrop = buildAntropometriaPayload({
-      protocolo: protocoloDobras,
-      sexo: sexoAvaliacao,
-      dobras,
-      peso,
-      idade,
-    })
-  }
-
-  try {
-    const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
-    const snap = await getDoc(refp)
-    const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
-
-    // substitui se mesma data
-    const filtrado = hist.filter((m) => m.data !== nova.data)
-    const atualizado = [...filtrado, nova].sort(
-      (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
-    )
-
-    await updateDoc(refp, { historicoMetricas: atualizado })
-    setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
-    setMetricas(atualizado)
-    toast({ title: "Nova métrica salva com sucesso!" })
-
-    // limpar campos (somente inputs editáveis)
-    setDataNovaMetrica("")
-    setPesoNovo("")
-    setAlturaNova("")
-    setCinturaNovo("")
-    setQuadrilNovo("")
-    setBracoNovo("")
-    setDobras({})
-    setIncludeAntrop(false)
-    setIncludeBio(false)
-    setBioPercentGordura("")
-    setBioPercentMassaMuscular("")
-    setBioMassaMuscular("")
-    setBioMassaGordura("")
-    setBioMassaLivre("")
-    setBioIGV("")
-  } catch (error) {
-    console.error(error)
-    toast({
-      title: "Erro ao salvar métrica",
-      description: "Verifique os campos e tente novamente.",
-      variant: "destructive",
-    })
-  }
+/** Faulkner (4 dobras → %G ≈ 0.153*sum + 5.783 → densidade equivalente) */
+function densidadeFaulkner(sum: number) {
+  const perc = 0.153 * sum + 5.783
+  return perc ? 495 / (perc + 450) : 0
 }
+
+/** Util curtas para tabelas / datas (opcional) */
+function fmtCell(v: any) {
+  return v === 0 || v == null || v === "" ? "-" : v
+}
+function fmtDataPtBR(d: string) {
+  return d && !isNaN(new Date(d).getTime())
+    ? new Date(d).toLocaleDateString("pt-BR")
+    : "Sem data"
+}
+
+/* --------------------------- NOTAS DE INTEGRAÇÃO ---------------------------
+1) Nada aqui sobrescreve seu layout original: sidebar, tabs de dietas/fotos/material
+   ficam intactas. Estes helpers só dão suporte aos novos modelos (Petroski, Guedes, Durnin, Faulkner).
+
+2) O gráfico foi ajustado na PARTE 3 com:
+   - wrapper max-w-[720px] + minWidth: 520 (evita “achatado”, inclusive com 1 medição)
+   - barCategoryGap e barGap condicionais quando há apenas 1 ponto.
+
+3) Inputs: seguimos apenas “inputs” visíveis; os “calculados” não aparecem mais no formulário.
+   O salvamento monta os campos calculados por baixo dos panos e salva no Firestore,
+   e o histórico mostra em 3 blocos como na foto.
+
+4) Se quiser reaproveitar estas fórmulas fora do onClick de salvar, basta chamar, por exemplo:
+   const d = densidadePetroski7(soma, getIdade(), sexoAvaliacao); const perc = siriPercent(d);
+
+--------------------------------------------------------------------------- */
+
