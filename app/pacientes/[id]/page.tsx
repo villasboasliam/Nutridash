@@ -438,9 +438,9 @@ n(dobraTricipital) + n(dobraSupraIliaca) + n(dobraCoxa)
         dens = densidadePollock7(soma, idade, sexo)
         break
       }
-      case "petroski": {
-        // variações com 7; 
-aqui usamos um conjunto típico: peitoral+axilar+tríceps+subescapular+abdominal+supra-ilíaca+coxa
+     case "petroski": {
+        // variações com 7; aqui usamos um conjunto típico: 
+        [cite_start]// peitoral+axilar+tríceps+subescapular+abdominal+supra-ilíaca+coxa [cite: 37]
         soma =
           n(dobraPeitoral) +
           n(dobraAxilarMedia) +
@@ -448,10 +448,9 @@ aqui usamos um conjunto típico: peitoral+axilar+tríceps+subescapular+abdominal
           n(dobraSubescapular) +
           n(dobraAbdominal) +
           n(dobraSupraIliaca) +
-          n(dobraCoxa)
-        dens = 
-soma > 0 ? densidadePetroski7(soma, idade, sexo) : 0
-        break
+          n(dobraCoxa);
+        dens = soma > 0 ? densidadePetroski7(soma, idade, sexo) : 0; [cite_start]// [cite: 38]
+        break;
       }
       case "guedes": {
         // 3 dobras: tríceps + supra-ilíaca + coxa
