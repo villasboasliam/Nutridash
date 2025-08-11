@@ -155,6 +155,7 @@ export default function PatientDetailPage() {
   const [nomeDieta, setNomeDieta] = useState("")
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null)
   const [tipoFoto, setTipoFoto] = useState("Foto Frontal")
+  const [dobras, setDobras] = useState<{ [key: string]: string }>({})
 
   const [selectedIndividualPDF, setSelectedIndividualPDF] = useState<File | null>(null)
   const [nomeMaterialIndividual, setNomeMaterialIndividual] = useState("")
