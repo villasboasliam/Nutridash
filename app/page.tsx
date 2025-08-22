@@ -13,25 +13,52 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useMobile } from "@/hooks/use-mobile"
+import { useLanguage } from "@/contexts/language-context"
+import { useToast } from "@/components/ui/use-toast"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts"
 
-interface AcessoDia { dia: string; acessos: number }
-interface Paciente { id: string; status?: string; [key: string]: any }
-interface ConsultaMes { mes: string; consultas: number }
-interface NovosClientesMes { mes: string; novos: number }
+interface AcessoDia {
+  dia: string
+  acessos: number
+}
+interface Paciente {
+  id: string
+  status?: string
+  [key: string]: any
+}
+
+interface ConsultaMes {
+  mes: string
+  consultas: number
+}
+
+interface NovosClientesMes {
+  mes: string
+  novos: number
+}
 
 export default function DashboardWrapper() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
-  useEffect(() => { if (!loading && !user) router.push("/login") }, [loading, user, router]);
-  if (loading || !user) return <div className="p-6 text-center">Carregando sessão...</div>;
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading || !user) {
+    return <div className="p-6 text-center">Carregando sessão...</div>;
+  }
+
   return <Dashboard user={user} />;
 }
 
 function Dashboard({ user }: { user: any }) {
   const pathname = usePathname();
-  const { t } = { t: (k: string) => k };
-
+  const { t } = useLanguage();
   const [metrics, setMetrics] = useState({
     totalPacientes: 0,
     pacientesAtivos: 0,
@@ -40,46 +67,55 @@ function Dashboard({ user }: { user: any }) {
     dietasSemanaAnterior: 0,
     taxaAcesso: 0,
     acessosPorDia: [] as AcessoDia[],
-    novosClientesPorMes: [] as NovosClientesMes[],  // <<< novo (pós-trim)
-    mesesNovosClientes: 12,                          // <<< novo (para o subtítulo)
+    novosClientesPorMes: [] as NovosClientesMes[], // série final (já cortada)
+    mesesNovosClientes: 12,                          // usado no subtítulo dinâmico
   });
   const [consultasUltimos6Meses, setConsultasUltimos6Meses] = useState<ConsultaMes[]>([]);
 
   useEffect(() => {
     const fetchMetrics = async () => {
       if (!user?.email) return;
+
       const nutricionistaEmail = user.email;
 
-      // ----- PACIENTES -----
+      // =============== PACIENTES ===============
       const pacientesSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes"));
-      const pacientes: Paciente[] = pacientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const pacientes: Paciente[] = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       const totalPacientes = pacientes.length;
       const pacientesAtivos = pacientes.filter(p => p.status === "Ativo").length;
       const pacientesAtivosSemanaAnterior = Math.max(0, pacientesAtivos - 1);
 
-      // ----- DIETAS -----
-      let dietasEnviadas = 0, dietasSemanaAnterior = 0;
+      // =============== DIETAS (mantido) ===============
+      let dietasEnviadas = 0;
+      let dietasSemanaAnterior = 0;
       try {
         const estatSnap = await getDoc(doc(db, "nutricionistas", nutricionistaEmail, "estatisticas", "dietas"));
         if (estatSnap.exists()) {
           dietasEnviadas = estatSnap.data().totalDietasEnviadas || 0;
           dietasSemanaAnterior = Math.max(0, dietasEnviadas - 1);
         }
-      } catch {}
+      } catch (error) {
+        // silencioso
+      }
+
       const taxaAcesso = Math.floor((pacientesAtivos / Math.max(totalPacientes, 1)) * 100);
 
-      // ===== NOVOS CLIENTES POR MÊS (últimos 12) =====
+      // =============== NOVOS CLIENTES POR MÊS (createdAt / created_at) ===============
+      // Monta série dos últimos 12 meses e corta zeros iniciais até o primeiro mês com >=1
       const mapaMes: Record<string, number> = {};
       const agora = new Date();
       const inicioJanPassado = new Date(agora.getFullYear(), agora.getMonth() - 11, 1); // 12 meses
 
       for (const d of pacientesSnap.docs) {
         const data = d.data() as any;
-        const createdVal = data?.createdAt ?? data?.created_at;
+        const createdVal = data?.createdAt ?? data?.created_at; // suporta createdAt (Timestamp) ou created_at
         let created: Date | null = null;
-        if (createdVal?.toDate) created = createdVal.toDate();
-        else if (typeof createdVal === "string" || typeof createdVal === "number") created = new Date(createdVal);
+        if (createdVal?.toDate) {
+          created = createdVal.toDate();
+        } else if (typeof createdVal === "string" || typeof createdVal === "number") {
+          created = new Date(createdVal);
+        }
 
         if (created && !isNaN(created.getTime()) && created >= inicioJanPassado) {
           const chave = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
@@ -87,43 +123,54 @@ function Dashboard({ user }: { user: any }) {
         }
       }
 
-      // gera os 12 meses cronológicos
+      // Gera série cronológica de 12 meses (inclui zeros)
       const mesesOrdenados: string[] = [];
       for (let i = 11; i >= 0; i--) {
         const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
         mesesOrdenados.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
       }
+
       const serie12: NovosClientesMes[] = mesesOrdenados.map(ym => {
         const [ano, mes] = ym.split("-");
         const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
         return { mes: nomeMes, novos: mapaMes[ym] || 0 };
       });
 
-      // ---- TRIM: remove zeros no início até o 1º mês com >=1 novo paciente
+      // Corta zeros iniciais até o primeiro mês com >=1 novo paciente
       let firstIdx = serie12.findIndex(m => m.novos > 0);
-      if (firstIdx === -1) firstIdx = 0;             // se todos zero, mantém 12 meses
+      if (firstIdx === -1) firstIdx = 0; // se todos zero, mantém 12
       const serieFinal = serie12.slice(firstIdx);
-      const mesesNovosClientes = Math.max(1, serieFinal.length); // evita 0
+      const mesesNovosClientes = Math.max(1, serieFinal.length);
 
-      // ----- ACESSOS POR DIA (mantido) -----
-      const acessosPorDiaMap: { [k: string]: number } = {};
-      const seteDiasAtras = new Date(); seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+      // =============== ACESSOS POR DIA (mantido) ===============
+      const acessosPorDiaMap: { [key: string]: number } = {};
+      const seteDiasAtras = new Date();
+      seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+
       for (const paciente of pacientes) {
         const acessosSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes", paciente.id, "acessosApp"));
-        acessosSnap.forEach(a => {
-          const ts = a.data()?.timestamp?.toDate?.();
-          if (ts && ts >= seteDiasAtras) {
-            const key = ts.toISOString().slice(0, 10);
-            acessosPorDiaMap[key] = (acessosPorDiaMap[key] || 0) + 1;
+        acessosSnap.forEach(acessoDoc => {
+          const timestamp = acessoDoc.data()?.timestamp?.toDate?.();
+          if (timestamp && timestamp >= seteDiasAtras) {
+            const dataAcesso = timestamp.toISOString().slice(0, 10);
+            acessosPorDiaMap[dataAcesso] = (acessosPorDiaMap[dataAcesso] || 0) + 1;
           }
         });
       }
+
       const diasSemana = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().slice(0,10);
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        return date.toISOString().slice(0, 10);
       }).reverse();
+
       const acessosDataCompleta: AcessoDia[] = diasSemana.map(dia => {
-        const dt = new Date(dia); dt.setTime(dt.getTime() + dt.getTimezoneOffset()*60000);
-        return { dia: dt.toLocaleDateString("pt-BR", { weekday: "short" }), acessos: acessosPorDiaMap[dia] || 0 };
+        const date = new Date(dia);
+        date.setTime(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
+        return {
+          dia: date.toLocaleDateString("pt-BR", { weekday: "short" }),
+          acessos: acessosPorDiaMap[dia] || 0,
+        };
       });
 
       setMetrics(prev => ({
@@ -135,32 +182,38 @@ function Dashboard({ user }: { user: any }) {
         dietasSemanaAnterior,
         taxaAcesso,
         acessosPorDia: acessosDataCompleta,
-        novosClientesPorMes: serieFinal,          // <<< pronto para o gráfico
-        mesesNovosClientes,                       // <<< para o subtítulo
+        novosClientesPorMes: serieFinal,
+        mesesNovosClientes,
       }));
 
-      // ----- CONSULTAS (mantido) -----
+      // =============== CONSULTAS (mantido) ===============
       const consultasRef = collection(db, "nutricionistas", nutricionistaEmail, "consultas");
-      const seisMesesAtras = new Date(); seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
-      const qConsultas = query(
-        consultasRef,
-        where("data", ">=", `${seisMesesAtras.getFullYear()}-${String(seisMesesAtras.getMonth() + 1).padStart(2,"0")}-${String(seisMesesAtras.getDate()).padStart(2,"0")}`)
-      );
+      const seisMesesAtras = new Date();
+      seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
+      const seisMesesAtrasString = `${seisMesesAtras.getFullYear()}-${(seisMesesAtras.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${seisMesesAtras.getDate().toString().padStart(2, "0")}`;
+      const qConsultas = query(consultasRef, where("data", ">=", seisMesesAtrasString));
       const consultasSnap = await getDocs(qConsultas);
-      const consultas = consultasSnap.docs.map(d => d.data() as any);
-      const bucket: Record<string, number> = {};
-      consultas.forEach(c => {
-        if (typeof c.data === "string" && c.data.includes("-")) {
-          const [ano, mes] = c.data.split("-");
-          const k = `${ano}-${mes}`;
-          bucket[k] = (bucket[k] || 0) + 1;
+      const consultas = consultasSnap.docs.map(doc => doc.data());
+      const consultasPorMes: { [key: string]: number } = {};
+      (consultas as any[]).forEach(consulta => {
+        const dataConsulta = (consulta as any).data;
+        if (typeof dataConsulta === "string" && dataConsulta.includes("-")) {
+          const [ano, mes] = dataConsulta.split("-");
+          const chave = `${ano}-${mes}`;
+          consultasPorMes[chave] = (consultasPorMes[chave] || 0) + 1;
         }
       });
-      const dataGraficoConsultas = Object.keys(bucket).sort().map(k => {
-        const [ano, mes] = k.split("-");
-        const nomeMes = new Date(parseInt(ano), parseInt(mes)-1, 1).toLocaleDateString("pt-BR",{month:"short"});
-        return { mes: nomeMes, consultas: bucket[k] };
-      });
+      const dataGraficoConsultas = Object.keys(consultasPorMes)
+        .sort()
+        .map(chave => {
+          const [ano, mes] = chave.split("-");
+          const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", {
+            month: "short",
+          });
+          return { mes: nomeMes, consultas: consultasPorMes[chave] };
+        });
       setConsultasUltimos6Meses(dataGraficoConsultas.slice(-6));
     };
 
@@ -175,13 +228,81 @@ function Dashboard({ user }: { user: any }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* sidebar e header mantidos... */}
+      {/* Sidebar fixa */}
+      <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+            <LineChart className="h-5 w-5" />
+            <span>NutriDash</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 p-2">
+          <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
+          <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
+          <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+          <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+          <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
+        </nav>
+      </aside>
 
+      {/* Conteúdo principal */}
       <div className="flex flex-col flex-1 lg:ml-64">
-        {/* ...header omitido para brevidade... */}
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="lg:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <div className="flex h-14 items-center border-b px-4">
+                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
+                  <LineChart className="h-5 w-5" />
+                  <span>NutriDash</span>
+                </Link>
+              </div>
+              <nav className="flex-1 space-y-1 p-2">
+                <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
+                <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
+                <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+                <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+                <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
+              </nav>
+            </SheetContent>
+          </Sheet>
+          <div className="w-full flex-1">
+            <h2 className="text-lg font-medium">{t("dashboard")}</h2>
+          </div>
+          <ThemeToggle />
+        </header>
 
         <main className="flex-1 p-4 md:p-6">
-          {/* cards mantidos... */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
+            <MetricCard
+              title={t("total.patients")}
+              value={metrics.totalPacientes}
+              icon={<Users className="h-4 w-4 text-muted-foreground" />}
+              note={`+${metrics.totalPacientes - 2} no último mês`}
+            />
+            <MetricCard
+              title={t("active.patients")}
+              value={metrics.pacientesAtivos}
+              icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+              note={calcVariation(metrics.pacientesAtivos, metrics.pacientesAtivosSemanaAnterior)}
+            />
+            <MetricCard
+              title={t("sent.diets")}
+              value={metrics.dietasEnviadas}
+              icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+              note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)}
+            />
+            <MetricCard
+              title={t("app.access.rate")}
+              value={`${metrics.taxaAcesso}%`}
+              icon={<LineChart className="h-4 w-4 text-muted-foreground" />}
+              note={`+${metrics.taxaAcesso - 45}% que mês passado`}
+            />
+          </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
             {/* === NOVOS CLIENTES POR MÊS (dinâmico) === */}
@@ -205,11 +326,11 @@ function Dashboard({ user }: { user: any }) {
               </CardContent>
             </Card>
 
-            {/* consultas mantido */}
+            {/* === Consultas por mês (mantido) === */}
             <Card>
               <CardHeader>
-                <CardTitle>Consultas por Mês</CardTitle>
-                <CardDescription>Número de consultas nos últimos 6 meses</CardDescription>
+                <CardTitle>{t("Consultas por Mês")}</CardTitle>
+                <CardDescription>{t("Número de consultas nos últimos 6 meses")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -227,7 +348,38 @@ function Dashboard({ user }: { user: any }) {
         </main>
       </div>
     </div>
-  );
+  )
 }
 
-// SidebarItem e MetricCard iguais aos seus originais...
+function SidebarItem({ href, icon, label, pathname }: { href: string, icon: React.ReactNode, label: string, pathname: string }) {
+  const isActive = pathname === href || pathname.startsWith(`${href}/`)
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+        isActive
+          ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"
+          : "text-foreground hover:bg-muted"
+      }`}
+    >
+      {icon}
+      {label}
+    </Link>
+  )
+}
+
+function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: React.ReactElement; note: string }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground">{note}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
