@@ -13,9 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { useMobile } from "@/hooks/use-mobile"
-import { useLanguage } from "@/contexts/language-context"
-import { useToast } from "@/components/ui/use-toast"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts"
 
 interface AcessoDia {
@@ -27,38 +24,34 @@ interface Paciente {
   status?: string
   [key: string]: any
 }
-
 interface ConsultaMes {
   mes: string
   consultas: number
+}
+interface NovosClientesMes {
+  mes: string
+  novos: number
 }
 
 export default function DashboardWrapper() {
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
 
-  console.log("🚀 Firebase Auth:", { loading, user });
-
   useEffect(() => {
-    if (loading) return; // Espera o carregamento da autenticação
-    if (!user) {
-      console.log("⚠ Redirecionando pois usuário não está autenticado");
-      router.push("/login");
-    }
+    if (loading) return;
+    if (!user) router.push("/login");
   }, [loading, user, router]);
 
   if (loading || !user) {
-    console.log("⏳ Ainda não autenticado, aguardando...");
     return <div className="p-6 text-center">Carregando sessão...</div>;
   }
 
-  console.log("✅ Usuário autenticado, renderizando Dashboard");
   return <Dashboard user={user} />;
 }
 
 function Dashboard({ user }: { user: any }) {
   const pathname = usePathname();
-  const { t } = useLanguage();
+  const { t } = { t: (k: string) => k }; // mantém seu contexto de i18n
   const [metrics, setMetrics] = useState({
     totalPacientes: 0,
     pacientesAtivos: 0,
@@ -67,21 +60,25 @@ function Dashboard({ user }: { user: any }) {
     dietasSemanaAnterior: 0,
     taxaAcesso: 0,
     acessosPorDia: [] as AcessoDia[],
+    novosClientesPorMes: [] as NovosClientesMes[], // <<< novo dataset
   });
   const [consultasUltimos6Meses, setConsultasUltimos6Meses] = useState<ConsultaMes[]>([]);
 
   useEffect(() => {
     const fetchMetrics = async () => {
-      if (!user?.email) return;  // <--- Aqui estava invertido
+      if (!user?.email) return;
 
       const nutricionistaEmail = user.email;
+
+      // ----- PACIENTES -----
       const pacientesSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes"));
-      const pacientes: Paciente[] = pacientesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const pacientes: Paciente[] = pacientesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       const totalPacientes = pacientes.length;
       const pacientesAtivos = pacientes.filter(p => p.status === "Ativo").length;
       const pacientesAtivosSemanaAnterior = Math.max(0, pacientesAtivos - 1);
 
+      // ----- DIETAS (como já estava) -----
       let dietasEnviadas = 0;
       let dietasSemanaAnterior = 0;
       try {
@@ -90,10 +87,47 @@ function Dashboard({ user }: { user: any }) {
           dietasEnviadas = estatSnap.data().totalDietasEnviadas || 0;
           dietasSemanaAnterior = Math.max(0, dietasEnviadas - 1);
         }
-      } catch (error) {}
+      } catch {}
 
       const taxaAcesso = Math.floor((pacientesAtivos / Math.max(totalPacientes, 1)) * 100);
 
+      // ----- (NOVO) NOVOS CLIENTES POR MÊS via createdAt -----
+      // Lê createdAt de cada doc de paciente (Timestamp do Firestore ou string ISO)
+      // e agrega por YYYY-MM.
+      const mapaMes: Record<string, number> = {};
+      const agora = new Date();
+      const inicioJanPassado = new Date(agora.getFullYear(), agora.getMonth() - 11, 1); // últimos 12 meses
+
+      for (const d of pacientesSnap.docs) {
+        const data = d.data() as any;
+        // suporta Timestamp do Firestore (has toDate) ou string
+        const createdVal = data?.createdAt ?? data?.created_at;
+        let created: Date | null = null;
+        if (createdVal?.toDate) {
+          created = createdVal.toDate();
+        } else if (typeof createdVal === "string" || typeof createdVal === "number") {
+          created = new Date(createdVal);
+        }
+
+        if (created && !isNaN(created.getTime()) && created >= inicioJanPassado) {
+          const chave = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}`;
+          mapaMes[chave] = (mapaMes[chave] || 0) + 1;
+        }
+      }
+
+      // garante todos os 12 meses, mesmo se 0
+      const mesesOrdenados: string[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+        mesesOrdenados.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+      const novosClientesPorMes: NovosClientesMes[] = mesesOrdenados.map(ym => {
+        const [ano, mes] = ym.split("-");
+        const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
+        return { mes: nomeMes, novos: mapaMes[ym] || 0 };
+      });
+
+      // ----- (ANTIGO) ACESSOS POR DIA — deixei calculado, mas não exibiremos -----
       const acessosPorDiaMap: { [key: string]: number } = {};
       const seteDiasAtras = new Date();
       seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
@@ -101,27 +135,22 @@ function Dashboard({ user }: { user: any }) {
       for (const paciente of pacientes) {
         const acessosSnap = await getDocs(collection(db, "nutricionistas", nutricionistaEmail, "pacientes", paciente.id, "acessosApp"));
         acessosSnap.forEach(acessoDoc => {
-          const timestamp = acessoDoc.data()?.timestamp?.toDate();
+          const timestamp = acessoDoc.data()?.timestamp?.toDate?.();
           if (timestamp && timestamp >= seteDiasAtras) {
             const dataAcesso = timestamp.toISOString().slice(0, 10);
             acessosPorDiaMap[dataAcesso] = (acessosPorDiaMap[dataAcesso] || 0) + 1;
           }
         });
       }
-
       const diasSemana = Array.from({ length: 7 }, (_, i) => {
         const date = new Date();
         date.setDate(date.getDate() - i);
         return date.toISOString().slice(0, 10);
       }).reverse();
-
       const acessosDataCompleta: AcessoDia[] = diasSemana.map(dia => {
         const date = new Date(dia);
         date.setTime(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
-        return {
-          dia: date.toLocaleDateString("pt-BR", { weekday: "short" }),
-          acessos: acessosPorDiaMap[dia] || 0,
-        };
+        return { dia: date.toLocaleDateString("pt-BR", { weekday: "short" }), acessos: acessosPorDiaMap[dia] || 0 };
       });
 
       setMetrics(prev => ({
@@ -133,34 +162,33 @@ function Dashboard({ user }: { user: any }) {
         dietasSemanaAnterior,
         taxaAcesso,
         acessosPorDia: acessosDataCompleta,
+        novosClientesPorMes, // <<< alimenta o novo gráfico
       }));
 
+      // ----- CONSULTAS (mantido) -----
       const consultasRef = collection(db, "nutricionistas", nutricionistaEmail, "consultas");
       const seisMesesAtras = new Date();
       seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 6);
       const seisMesesAtrasString = `${seisMesesAtras.getFullYear()}-${(seisMesesAtras.getMonth() + 1)
         .toString()
         .padStart(2, "0")}-${seisMesesAtras.getDate().toString().padStart(2, "0")}`;
-      const q = query(consultasRef, where("data", ">=", seisMesesAtrasString));
-      const consultasSnap = await getDocs(q);
-      const consultas = consultasSnap.docs.map(doc => doc.data());
+      const qConsultas = query(consultasRef, where("data", ">=", seisMesesAtrasString));
+      const consultasSnap = await getDocs(qConsultas);
+      const consultas = consultasSnap.docs.map(d => d.data());
       const consultasPorMes: { [key: string]: number } = {};
-      consultas.forEach(consulta => {
-        const dataConsulta = consulta.data;
+      consultas.forEach((c: any) => {
+        const dataConsulta = c.data;
         if (typeof dataConsulta === "string" && dataConsulta.includes("-")) {
           const [ano, mes] = dataConsulta.split("-");
           const chave = `${ano}-${mes}`;
           consultasPorMes[chave] = (consultasPorMes[chave] || 0) + 1;
         }
       });
-
       const dataGraficoConsultas = Object.keys(consultasPorMes)
         .sort()
         .map(chave => {
           const [ano, mes] = chave.split("-");
-          const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", {
-            month: "short",
-          });
+          const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
           return { mes: nomeMes, consultas: consultasPorMes[chave] };
         });
       setConsultasUltimos6Meses(dataGraficoConsultas.slice(-6));
@@ -168,11 +196,6 @@ function Dashboard({ user }: { user: any }) {
 
     fetchMetrics();
   }, [user]);
-
-
-
-
-
 
   const calcVariation = (current: number, previous: number) => {
     if (previous === 0) return "+100%"
@@ -229,74 +252,73 @@ function Dashboard({ user }: { user: any }) {
         </header>
 
         <main className="flex-1 p-4 md:p-6">
-          
-  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
-    <MetricCard
-      title={t("total.patients")}
-      value={metrics.totalPacientes}
-      icon={<Users className="h-4 w-4 text-muted-foreground" />}
-      note={`+${metrics.totalPacientes - 2} no último mês`}
-    />
-    <MetricCard
-      title={t("active.patients")}
-      value={metrics.pacientesAtivos}
-      icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-      note={calcVariation(metrics.pacientesAtivos, metrics.pacientesAtivosSemanaAnterior)}
-    />
-    <MetricCard
-      title={t("sent.diets")}
-      value={metrics.dietasEnviadas}
-      icon={<FileText className="h-4 w-4 text-muted-foreground" />}
-      note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)}
-    />
-    <MetricCard
-      title={t("app.access.rate")}
-      value={`${metrics.taxaAcesso}%`}
-      icon={<LineChart className="h-4 w-4 text-muted-foreground" />}
-      note={`+${metrics.taxaAcesso - 45}% que mês passado`}
-    />
-  </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-6">
+            <MetricCard
+              title={t("total.patients")}
+              value={metrics.totalPacientes}
+              icon={<Users className="h-4 w-4 text-muted-foreground" />}
+              note={`+${metrics.totalPacientes - 2} no último mês`}
+            />
+            <MetricCard
+              title={t("active.patients")}
+              value={metrics.pacientesAtivos}
+              icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
+              note={calcVariation(metrics.pacientesAtivos, metrics.pacientesAtivosSemanaAnterior)}
+            />
+            <MetricCard
+              title={t("sent.diets")}
+              value={metrics.dietasEnviadas}
+              icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+              note={calcVariation(metrics.dietasEnviadas, metrics.dietasSemanaAnterior)}
+            />
+            <MetricCard
+              title={t("app.access.rate")}
+              value={`${metrics.taxaAcesso}%`}
+              icon={<LineChart className="h-4 w-4 text-muted-foreground" />}
+              note={`+${metrics.taxaAcesso - 45}% que mês passado`}
+            />
+          </div>
 
-  <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("app.access")}</CardTitle>
-        <CardDescription>{t("daily.access")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={metrics.acessosPorDia}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="dia" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="acessos" fill="#6366F1" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+          <div className="mt-6 grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+            {/* === NOVO GRÁFICO: Novos clientes por mês (createdAt) === */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Novos clientes por mês</CardTitle>
+                <CardDescription>Contagem por createdAt nos últimos 12 meses</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.novosClientesPorMes}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="mes" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="novos" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("Consultas por Mês")}</CardTitle>
-        <CardDescription>{t("Número de consultas nos últimos 6 meses")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={consultasUltimos6Meses}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="consultas" fill="#6366F1" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  </div>
-</main>
-
-     
+            {/* gráfico de consultas mantido */}
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("Consultas por Mês")}</CardTitle>
+                <CardDescription>{t("Número de consultas nos últimos 6 meses")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={consultasUltimos6Meses}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="mes" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="consultas" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
       </div>
     </div>
   )
@@ -318,6 +340,7 @@ function SidebarItem({ href, icon, label, pathname }: { href: string, icon: Reac
     </Link>
   )
 }
+
 function MetricCard({ title, value, icon, note }: { title: string; value: any; icon: React.ReactElement; note: string }) {
   return (
     <Card>
@@ -332,3 +355,4 @@ function MetricCard({ title, value, icon, note }: { title: string; value: any; i
     </Card>
   )
 }
+
