@@ -199,6 +199,59 @@ export default function PatientDetailPage() {
   const [massaLivreGorduraNovo, setMassaLivreGorduraNovo] = useState("")
   const [massaGorduraPercentNovo, setMassaGorduraPercentNovo] = useState("")
   const [massaLivreGorduraPercentNovo, setMassaLivreGorduraPercentNovo] = useState("")
+  
+  // --- editar/excluir por coluna (medição) ---
+const [editOpen, setEditOpen] = useState(false)
+const [entryEdit, setEntryEdit] = useState<MetricaEntry | null>(null)
+const [deleteTargetDate, setDeleteTargetDate] = useState<string | null>(null)
+
+const handleOpenEditByDate = (d: string) => {
+  const e = metricas.find(x => {
+    const lab = x.data && !isNaN(new Date(x.data).getTime())
+      ? new Date(x.data).toLocaleDateString("pt-BR")
+      : "Sem data"
+    return lab === d
+  })
+  if (e) {
+    setEntryEdit({ ...e })
+    setEditOpen(true)
+  }
+}
+
+const handleSaveEditByDate = async () => {
+  if (!user?.email || !entryEdit) return
+  const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+  const snap = await getDoc(refp)
+  const hist: MetricaEntry[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+  const updated = hist.map(h => h.data === entryEdit.data ? entryEdit : h)
+    .sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+  await updateDoc(refp, { historicoMetricas: updated })
+  setMetricas(updated)
+  setPatient(prev => prev ? { ...prev, historicoMetricas: updated } : prev)
+  setEditOpen(false)
+  toast({ title: "Medição atualizada" })
+}
+
+const handleConfirmDeleteByDate = async () => {
+  if (!user?.email || !deleteTargetDate) return
+  const refp = doc(db, "nutricionistas", user.email, "pacientes", id)
+  const snap = await getDoc(refp)
+  const hist: MetricaEntry[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+  const toRemove = hist.find(h => {
+    const lab = h.data && !isNaN(new Date(h.data).getTime())
+      ? new Date(h.data).toLocaleDateString("pt-BR")
+      : "Sem data"
+    return lab === deleteTargetDate
+  })
+  if (!toRemove) { setDeleteTargetDate(null); return }
+  const updated = hist.filter(h => h.data !== toRemove.data)
+    .sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+  await updateDoc(refp, { historicoMetricas: updated })
+  setMetricas(updated)
+  setPatient(prev => prev ? { ...prev, historicoMetricas: updated } : prev)
+  setDeleteTargetDate(null)
+  toast({ title: "Medição excluída" })
+}
 
   // Edição simples (mantido)
   const [editData, setEditData] = useState({
@@ -234,6 +287,13 @@ export default function PatientDetailPage() {
     const cleanedValue = value.replace(",", ".")
     return isNaN(Number(cleanedValue)) || cleanedValue.trim() === "" ? 0 : Number(cleanedValue)
   }
+ // Exibe números com vírgula e no máx. 1 casa decimal
+const fmt = (v: any) => {
+  if (v === 0 || v == null || v === "") return "-"
+  const n = Number(v)
+  if (Number.isNaN(n)) return "-"
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })
+}
 
   const formatTelefone = (telefone: string) => {
     const cleaned = telefone.replace(/\D/g, "")
@@ -344,6 +404,9 @@ export default function PatientDetailPage() {
       ? 1.1714 - 0.0779 * Math.log10(sum || 1) - 0.00073 * idade
       : 1.17136 - 0.06706 * Math.log10(sum || 1) - 0.000221 * idade
   }
+
+  const compact = <T extends Record<string, any>>(obj: T): T =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T
   // Durnin & Womersley (bicipital + tricipital + subescapular + supra-ilíaca)
   const densidadeDurnin4 = (sum: number, idade: number, sexo: string) => {
     const fem = (sexo || "").toLowerCase().startsWith("f")
@@ -373,12 +436,20 @@ export default function PatientDetailPage() {
 
   /* ======================= Recalcular da UI de dobras ======================= */
   const recalcFromSkinfolds = useCallback(() => {
-    const n = (v: string) => (v.trim() === "" ? 0 : Number(v.replace(",", ".")))
-    const idade = getIdade()
-    const sexo = (sexoAvaliacao || "").toLowerCase()
+  // se não for usar dobras, não calcule nada daqui
+  if (protocoloDobras === "nenhum") {
+    setSomatorioDobrasNovo("")
+    setDensidadeCorporalNovoInput("")
+    // não mexe nos campos de bioimpedância aqui
+    return
+  }
 
-    let soma = 0
-    let dens = 0
+  const n = (v: string) => (v.trim() === "" ? 0 : Number(v.replace(",", ".")))
+  const idade = getIdade()
+  const sexo = (sexoAvaliacao || "").toLowerCase()
+
+  let soma = 0
+  let dens = 0
 
     switch (protocoloDobras) {
       case "pollock3": {
@@ -782,6 +853,14 @@ export default function PatientDetailPage() {
   }
 
   const isClient = typeof window !== "undefined"
+
+// === Datas (colunas) padronizadas para os 3 blocos ===
+const dateCols = metricas.map((m) =>
+  m.data && !isNaN(new Date(m.data).getTime())
+    ? new Date(m.data).toLocaleDateString("pt-BR")
+    : "Sem data"
+)
+
   /* ======================= Layout / UI principal ======================= */
   return (
     <div className="flex min-h-screen">
@@ -1396,19 +1475,64 @@ export default function PatientDetailPage() {
                     <CardHeader><CardTitle>Histórico — Análises básicas</CardTitle></CardHeader>
                     <CardContent className="overflow-x-auto">
                       {metricas.length > 0 ? (
-                        <table className="w-full text-sm text-left border">
+                        <table className="w-full text-sm text-left border table-fixed">
+                              <colgroup>
+                                <col style={{ width: 220 }} />
+                                {dateCols.map((_, i) => (
+                                  <col key={i} style={{ width: 140 }} />
+                                ))}
+                              </colgroup>
+
                           <thead className="bg-muted">
-                            <tr>
-                              <th className="p-2 text-left">Métrica</th>
-                              {metricas.map((m, i) => (
-                                <th key={i} className="p-2 text-center">
-                                  {m.data && !isNaN(new Date(m.data).getTime())
-                                    ? new Date(m.data).toLocaleDateString("pt-BR")
-                                    : "Sem data"}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
+  <tr>
+    <th className="p-2 text-left">Métrica</th>
+    {dateCols.map((d, i) => (
+      <th key={i} className="p-2 text-center">
+        <div className="flex items-center justify-center gap-1">
+          <span className="truncate">{d}</span>
+          <button
+            className="p-1 hover:bg-muted rounded"
+            title="Editar medição"
+            onClick={() => handleOpenEditByDate(d)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                className="p-1 hover:bg-muted rounded"
+                title="Excluir medição"
+                onClick={() => setDeleteTargetDate(d)}
+              >
+                <Trash className="h-3.5 w-3.5" />
+              </button>
+            </AlertDialogTrigger>
+            {deleteTargetDate === d && (
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir medição de {d}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setDeleteTargetDate(null)}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={handleConfirmDeleteByDate}
+                  >
+                    Excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            )}
+          </AlertDialog>
+        </div>
+      </th>
+    ))}
+  </tr>
+</thead>
+
                           <tbody>
                             {[
                               { k: "peso", label: "Peso (kg)" },
@@ -1424,7 +1548,7 @@ export default function PatientDetailPage() {
                                 <td className="p-2 font-medium">{row.label}</td>
                                 {metricas.map((m: any, i: number) => (
                                   <td key={i} className="p-2 text-center">
-                                    {m?.[row.k] === 0 || m?.[row.k] == null || m?.[row.k] === "" ? "-" : m[row.k]}
+                                    {fmt(m?.[row.k])}
                                   </td>
                                 ))}
                               </tr>
@@ -1444,7 +1568,14 @@ export default function PatientDetailPage() {
                       {metricas.some((m) =>
                         m.gorduraPercentual != null || m.massaGordura != null || m.massaLivreGordura != null
                       ) ? (
-                        <table className="w-full text-sm text-left border">
+                        <table className="w-full text-sm text-left border table-fixed">
+  <colgroup>
+    <col style={{ width: 220 }} />
+    {dateCols.map((_, i) => (
+      <col key={i} style={{ width: 140 }} />
+    ))}
+  </colgroup>
+
                           <thead className="bg-muted">
                             <tr>
                               <th className="p-2 text-left">Indicador</th>
@@ -1469,7 +1600,7 @@ export default function PatientDetailPage() {
                                 <td className="p-2 font-medium">{row.label}</td>
                                 {metricas.map((m: any, i: number) => (
                                   <td key={i} className="p-2 text-center">
-                                    {m?.[row.k] === 0 || m?.[row.k] == null || m?.[row.k] === "" ? "-" : m[row.k]}
+                                    {fmt(m?.[row.k])}
                                   </td>
                                 ))}
                               </tr>
@@ -1487,7 +1618,14 @@ export default function PatientDetailPage() {
                     <CardHeader><CardTitle>Histórico — Medidas antropométricas</CardTitle></CardHeader>
                     <CardContent className="overflow-x-auto">
                       {metricas.some((m) => m.somatorioDobras != null || m.densidadeCorporal != null) ? (
-                        <table className="w-full text-sm text-left border mb-6">
+                        <table className="w-full text-sm text-left border mb-6 table-fixed">
+  <colgroup>
+    <col style={{ width: 220 }} />
+    {dateCols.map((_, i) => (
+      <col key={i} style={{ width: 140 }} />
+    ))}
+  </colgroup>
+
                           <thead className="bg-muted">
                             <tr>
                               <th className="p-2 text-left">Indicador</th>
@@ -1509,7 +1647,7 @@ export default function PatientDetailPage() {
                                 <td className="p-2 font-medium">{row.label}</td>
                                 {metricas.map((m: any, i: number) => (
                                   <td key={i} className="p-2 text-center">
-                                    {m?.[row.k] === 0 || m?.[row.k] == null || m?.[row.k] === "" ? "-" : m[row.k]}
+                                    {fmt(m?.[row.k])}
                                   </td>
                                 ))}
                               </tr>
@@ -1558,7 +1696,9 @@ export default function PatientDetailPage() {
                             >
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="data" />
-                              <YAxis domain={[0, 100]} />
+                              <YAxis domain={[0, 100]} tickFormatter={(v) => fmt(v)} />
+<Tooltip formatter={(value) => fmt(value)} />
+
                               <Tooltip />
                               <Legend />
                               <Bar dataKey="massaGorda" name="Massa gorda (%)" stackId="a" fill="#6366F1" />
@@ -1766,7 +1906,7 @@ export default function PatientDetailPage() {
                             <Input
                               value={gorduraPercentualNovoInput}
                               onChange={(e) => setGorduraPercentualNovoInput(e.target.value)}
-                              placeholder="Ex: 26.5"
+                              placeholder="Ex: 26,5"
                             />
                           </div>
                           <div className="grid gap-1">
@@ -1774,7 +1914,7 @@ export default function PatientDetailPage() {
                             <Input
                               value={massaGorduraNovo}
                               onChange={(e) => setMassaGorduraNovo(e.target.value)}
-                              placeholder="Ex: 18.6"
+                              placeholder="Ex: 18,6"
                             />
                           </div>
                           <div className="grid gap-1">
@@ -1782,7 +1922,7 @@ export default function PatientDetailPage() {
                             <Input
                               value={massaLivreGorduraNovo}
                               onChange={(e) => setMassaLivreGorduraNovo(e.target.value)}
-                              placeholder="Ex: 48.8"
+                              placeholder="Ex: 48,8"
                             />
                           </div>
                           <div className="grid gap-1">
@@ -1868,75 +2008,87 @@ export default function PatientDetailPage() {
                                 }
                               }
 
-                              // bioimpedância/manuais
-                              const gPctManual = parseNumber(gorduraPercentualNovoInput)
-                              const mgManual = massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined
-                              const mlgManual = massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined
-                              const mgPercManual = massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined
-                              const mlgPercManual = massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined
+                             // --- garanta a data de hoje (YYYY-MM-DD) se o usuário não preencheu ---
+const hoje = new Date()
+hoje.setDate(hoje.getDate() + 1) // 👈 adiciona +1 dia
+const hojeISO = hoje.toISOString().slice(0, 10)
+const dataFinal = (dataNovaMetrica && dataNovaMetrica.trim()) ? dataNovaMetrica : hojeISO
+// bioimpedância / valores manuais (precisam existir antes de montar `nova`)
+const gPctManual = parseNumber(gorduraPercentualNovoInput)
+const mgManual = massaGorduraNovo ? Number(massaGorduraNovo.replace(",", ".")) : undefined
+const mlgManual = massaLivreGorduraNovo ? Number(massaLivreGorduraNovo.replace(",", ".")) : undefined
+const mgPercManual = massaGorduraPercentNovo ? Number(massaGorduraPercentNovo.replace(",", ".")) : undefined
+const mlgPercManual = massaLivreGorduraPercentNovo ? Number(massaLivreGorduraPercentNovo.replace(",", ".")) : undefined
 
-                              const nova: any = {
-                                data: dataNovaMetrica,
-                                peso,
-                                altura,
-                                cintura,
-                                quadril,
-                                braco,
-                                imc: imc || undefined,
-                                classificacaoImc: classifyIMC(imc) || undefined,
-                                rcq: rcq || undefined,
-                                riscoRcq: classifyRCQ(rcq, sexoAvaliacao) || undefined,
-                                cmb: cmb || undefined,
-                                classificacaoCmb: classifyCMB(cmb) || undefined,
-                                somatorioDobras: somatorioDobrasCalc || undefined,
-                                densidadeCorporal: densidadeCalc || undefined,
-                                gorduraPercentual: gPctManual || undefined,
-                                massaGordura: mgManual || undefined,
-                                massaLivreGordura: mlgManual || undefined,
-                                massaGorduraPercent: mgPercManual || (gPctManual ? gPctManual : undefined),
-                                massaLivreGorduraPercent: mlgPercManual || (gPctManual ? Math.max(0, 100 - gPctManual) : undefined),
-                              }
+const nova: any = {
+  data: dataFinal,
+  peso,
+  altura,
+  cintura,
+  quadril,
+  braco,
+  imc: imc || undefined,
+  classificacaoImc: classifyIMC(imc) || undefined,
+  rcq: rcq || undefined,
+  riscoRcq: classifyRCQ(rcq, sexoAvaliacao) || undefined,
+  cmb: cmb || undefined,
+  classificacaoCmb: classifyCMB(cmb) || undefined,
+  somatorioDobras: somatorioDobrasCalc || undefined,
+  densidadeCorporal: densidadeCalc || undefined,
+  gorduraPercentual: gPctManual || undefined,
+  massaGordura: mgManual || undefined,
+  massaLivreGordura: mlgManual || undefined,
+  massaGorduraPercent: mgPercManual || (gPctManual ? gPctManual : undefined),
+  massaLivreGorduraPercent: mlgPercManual || (gPctManual ? Math.max(0, 100 - gPctManual) : undefined),
+}
 
-                              try {
-                                const snap = await getDoc(refp)
-                                const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
-                                const filtrado = hist.filter((m) => m.data !== nova.data)
-                                const atualizado = [...filtrado, nova].sort(
-                                  (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
-                                )
-                                await updateDoc(refp, { historicoMetricas: atualizado })
-                                setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
-                                setMetricas(atualizado)
-                                toast({ title: "Nova métrica salva com sucesso!" })
+// <<< remove undefined antes de salvar (evita o erro do Firestore) >>>
+const novaClean = compact(nova)
 
-                                // limpa inputs
-                                setDataNovaMetrica("")
-                                setPesoNovo("")
-                                setAlturaNova("")
-                                setCinturaNovo("")
-                                setQuadrilNovo("")
-                                setBracoNovo("")
-                                setGorduraPercentualNovoInput("")
-                                setMassaGorduraNovo("")
-                                setMassaLivreGorduraNovo("")
-                                setMassaGorduraPercentNovo("")
-                                setMassaLivreGorduraPercentNovo("")
-                                setDobraPeitoral("")
-                                setDobraAbdominal("")
-                                setDobraCoxa("")
-                                setDobraTricipital("")
-                                setDobraSupraIliaca("")
-                                setDobraAxilarMedia("")
-                                setDobraSubescapular("")
-                                setDobraBicipital("")
-                              } catch (error) {
-                                console.error(error)
-                                toast({
-                                  title: "Erro ao salvar métrica",
-                                  description: "Verifique os campos e tente novamente.",
-                                  variant: "destructive",
-                                })
-                              }
+try {
+  const snap = await getDoc(refp)
+  const hist: any[] = snap.exists() ? (snap.data().historicoMetricas || []) : []
+
+  // remove medição com a mesma DATA e adiciona a nova já “limpa”
+  const filtrado = hist.filter((m) => m.data !== novaClean.data)
+  const atualizado = [...filtrado, novaClean].sort(
+    (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
+  )
+
+  await updateDoc(refp, { historicoMetricas: atualizado })
+  setPatient((prev: any) => (prev ? { ...prev, historicoMetricas: atualizado } : prev))
+  setMetricas(atualizado)
+  toast({ title: "Nova métrica salva com sucesso!" })
+
+  // limpa inputs (mantém seu bloco atual)
+  setDataNovaMetrica("")
+  setPesoNovo("")
+  setAlturaNova("")
+  setCinturaNovo("")
+  setQuadrilNovo("")
+  setBracoNovo("")
+  setGorduraPercentualNovoInput("")
+  setMassaGorduraNovo("")
+  setMassaLivreGorduraNovo("")
+  setMassaGorduraPercentNovo("")
+  setMassaLivreGorduraPercentNovo("")
+  setDobraPeitoral("")
+  setDobraAbdominal("")
+  setDobraCoxa("")
+  setDobraTricipital("")
+  setDobraSupraIliaca("")
+  setDobraAxilarMedia("")
+  setDobraSubescapular("")
+  setDobraBicipital("")
+} catch (error) {
+  console.error(error)
+  toast({
+    title: "Erro ao salvar métrica",
+    description: "Verifique os campos e tente novamente.",
+    variant: "destructive",
+  })
+}
+
                             }}
                             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
                           >
@@ -1947,6 +2099,71 @@ export default function PatientDetailPage() {
                     </div>
                   </CardContent>
                 </Card>
+                <Dialog open={editOpen} onOpenChange={setEditOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Editar medição</DialogTitle>
+      <DialogDescription>Atualize os campos e salve.</DialogDescription>
+    </DialogHeader>
+
+    {entryEdit && (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid gap-1">
+          <Label>Data</Label>
+          <Input
+            type="date"
+            value={entryEdit.data || ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, data: e.target.value })}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Peso (kg)</Label>
+          <Input
+            value={entryEdit.peso ?? ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, peso: Number(e.target.value.replace(",", ".")) || 0 })}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Altura (cm)</Label>
+          <Input
+            value={entryEdit.altura ?? ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, altura: Number(e.target.value.replace(",", ".")) || 0 })}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Cintura (cm)</Label>
+          <Input
+            value={entryEdit.cintura ?? ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, cintura: Number(e.target.value.replace(",", ".")) || 0 })}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Quadril (cm)</Label>
+          <Input
+            value={entryEdit.quadril ?? ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, quadril: Number(e.target.value.replace(",", ".")) || 0 })}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Braço (cm)</Label>
+          <Input
+            value={entryEdit.braco ?? ""}
+            onChange={(e) => setEntryEdit({ ...entryEdit, braco: Number(e.target.value.replace(",", ".")) || 0 })}
+          />
+        </div>
+        {/* Exponha outros campos aqui se desejar */}
+      </div>
+    )}
+
+    <DialogFooter className="mt-4">
+      <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+      <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSaveEditByDate}>
+        Salvar
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
               </TabsContent>
             </Tabs>
           </div>
@@ -1979,4 +2196,11 @@ function SidebarLinks({ pathname }: { pathname: string }) {
       <Item href="/perfil" label="Perfil" icon={User} />
     </div>
   )
+}
+function hojeBR() {
+  const agora = new Date()
+  const ano = agora.getFullYear()
+  const mes = String(agora.getMonth() + 1).padStart(2, "0")
+  const dia = String(agora.getDate()).padStart(2, "0")
+  return `${ano}-${mes}-${dia}` // YYYY-MM-DD
 }
