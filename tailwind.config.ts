@@ -19,6 +19,7 @@ const config = {
     },
     extend: {
       colors: {
+        /* tokens principais (HSL) */
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -53,7 +54,12 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
 
-        // 🎨 Tons mais suaves para dark mode
+        /* ===== NutriDash brand (lerá HEX das CSS vars) ===== */
+        "nutridash-purple": "var(--nutridash-purple)",
+        "nutridash-blue": "var(--nutridash-blue)",
+        "nutridash-light": "var(--nutridash-light)",
+
+        // 🎨 tons para dark (mantidos do seu config)
         dark: {
           background: "#1a1a1a",
           card: "#232323",
@@ -61,6 +67,7 @@ const config = {
           input: "#333333",
         },
 
+        // Escala indigo (mantida)
         indigo: {
           50: "#eef2ff",
           100: "#e0e7ff",
