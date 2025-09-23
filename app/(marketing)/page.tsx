@@ -1,19 +1,37 @@
-import dynamic from "next/dynamic";
+"use client";
+
+import { useEffect } from "react";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Clock, Users, BarChart3, Smartphone, Star, Menu } from "lucide-react";
 
-// Redireciona logado -> /dashboard apenas no cliente
-const ClientAuthRedirect = dynamic(() => import("./_ClientAuthRedirect"), { ssr: false });
+/**
+ * Observações:
+ * - As classes "bg-nutridash-purple", "bg-nutridash-light", "bg-nutridash-blue" foram mantidas.
+ *   Se não existirem no seu Tailwind, troque por equivalents (ex.: bg-indigo-600, bg-indigo-50, bg-indigo-500),
+ *   ou crie as cores personalizadas no tailwind.config.ts.
+ * - As imagens devem estar em /public. Verifique os nomes dos arquivos; ajuste se necessário.
+ */
 
 export default function NutriDashLanding() {
+  const [user, loading] = useAuthState(auth);
+  const router = useRouter();
+
+  // Já logado? Vai direto para o dashboard
+  useEffect(() => {
+    if (!loading && user) router.replace("/dashboard");
+  }, [loading, user, router]);
+
+  if (loading) return null;
+
   return (
     <div className="min-h-screen bg-white">
-      <ClientAuthRedirect />
-
       {/* Header */}
       <header className="border-b border-gray-100 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -51,7 +69,7 @@ export default function NutriDashLanding() {
             </Link>
           </nav>
 
-          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menu">
+          <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="w-5 h-5" />
           </Button>
         </div>
@@ -232,7 +250,7 @@ export default function NutriDashLanding() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Básico — com “Mais popular” */}
+            {/* Básico — agora com “Mais popular” */}
             <Card className="relative border-0 shadow-lg hover:shadow-xl transition-shadow">
               <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                 <Badge className="bg-nutridash-purple text-white px-4 py-1">Mais popular</Badge>
@@ -255,9 +273,11 @@ export default function NutriDashLanding() {
               </CardContent>
             </Card>
 
-            {/* Profissional — película cinza + “Em breve” */}
+            {/* Profissional — com película cinza + fita “Em breve” e botão desabilitado */}
             <Card className="relative border-2 border-nutridash-purple shadow-xl hover:shadow-2xl transition-shadow">
+              {/* Película (overlay) */}
               <div className="pointer-events-none absolute inset-0 rounded-xl bg-gray-900/50 z-10" />
+              {/* Fita “Em breve” */}
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
                 <Badge className="bg-gray-800 text-white px-4 py-1">Em breve</Badge>
               </div>
@@ -275,15 +295,20 @@ export default function NutriDashLanding() {
                 <Feature>Listas de compras automáticas</Feature>
                 <Feature>Analytics e relatórios</Feature>
                 <Feature>Suporte prioritário</Feature>
-                <Button className="w-full mt-8 bg-nutridash-purple text-white" disabled>
+                <Button
+                  className="w-full mt-8 bg-nutridash-purple hover:bg-nutridash-blue text-white"
+                  disabled
+                >
                   Em breve
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Premium — película cinza + “Em breve” */}
+            {/* Premium — com película cinza + fita “Em breve” e botão desabilitado */}
             <Card className="relative border-0 shadow-lg hover:shadow-xl transition-shadow">
+              {/* Película (overlay) */}
               <div className="pointer-events-none absolute inset-0 rounded-xl bg-gray-900/50 z-10" />
+              {/* Fita “Em breve” */}
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
                 <Badge className="bg-gray-800 text-white px-4 py-1">Em breve</Badge>
               </div>
@@ -386,7 +411,7 @@ export default function NutriDashLanding() {
             <div>
               <h3 className="font-semibold mb-4">Produto</h3>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#features" className="hover:text-white transition-colors">Recursos</a></li>
+              <li><a href="#features" className="hover:text-white transition-colors">Recursos</a></li> 
                 <li><a href="#pricing" className="hover:text-white transition-colors">Planos</a></li>
                 <li><a href="#features" className="hover:text-white transition-colors">App Mobile</a></li>
                 <li><a href="#" className="hover:text-white transition-colors">API</a></li>
