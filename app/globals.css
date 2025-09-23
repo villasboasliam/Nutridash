@@ -2,18 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
-
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
 }
-
 
 @layer base {
   :root {
@@ -42,6 +39,7 @@ body {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -50,8 +48,12 @@ body {
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 
+    /* === NutriDash brand (hex) === */
+    --nutridash-purple: #6366f1;       /* indigo-500 */
+    --nutridash-blue: #4f46e5;         /* indigo-600 */
+    --nutridash-light: #eef2ff;        /* indigo-50  */
+  }
 
   .dark {
     --background: 0 0% 3.9%;
@@ -78,6 +80,7 @@ body {
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -86,13 +89,16 @@ body {
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 
+    /* opcional: leve ajuste no dark para a marca */
+    /* --nutridash-purple: #818cf8;  */
+    /* --nutridash-blue: #6366f1;    */
+    /* --nutridash-light: #1e1b4b;   */
+  }
 
   * {
     @apply border-border;
   }
-
 
   body {
     @apply bg-background text-foreground;
@@ -103,3 +109,11 @@ html, body {
   height: 100%;
   background-color: hsl(var(--background));
 }
+
+/* Helpers de marca (opcionais; Tailwind também vai gerar as classes via theme.extend.colors) */
+.bg-nutridash-purple { background-color: var(--nutridash-purple) !important; }
+.bg-nutridash-blue   { background-color: var(--nutridash-blue) !important; }
+.bg-nutridash-light  { background-color: var(--nutridash-light) !important; }
+.text-nutridash-purple { color: var(--nutridash-purple) !important; }
+.text-nutridash-blue   { color: var(--nutridash-blue) !important; }
+.border-nutridash-purple { border-color: var(--nutridash-purple) !important; }
