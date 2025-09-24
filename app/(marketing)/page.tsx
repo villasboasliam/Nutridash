@@ -1,20 +1,17 @@
-// app/(marketing)/page.tsx
-export const dynamic = "force-static";
-
 import Link from "next/link";
-import dynamic from "next/dynamic";
+import ClientAuthRedirect from "./_ClientAuthRedirect";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Clock, Users, BarChart3, Smartphone, Star, Menu } from "lucide-react";
 
-// Redireciona usuários logados para /dashboard somente no client
-const ClientAuthRedirect = dynamic(() => import("./_ClientAuthRedirect"), { ssr: false });
+export const dynamic = "force-static";
 
 export default function NutriDashLanding() {
   return (
     <div className="min-h-screen bg-white">
+      {/* redireciona logado no client */}
       <ClientAuthRedirect />
 
       {/* Header */}
@@ -28,29 +25,18 @@ export default function NutriDashLanding() {
           </div>
 
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="#features" className="text-gray-600 hover:text-nutridash-purple transition-colors">
-              Recursos
-            </a>
-            <a href="#pricing" className="text-gray-600 hover:text-nutridash-purple transition-colors">
-              Planos
-            </a>
-            <a href="#testimonials" className="text-gray-600 hover:text-nutridash-purple transition-colors">
-              Depoimentos
-            </a>
+            <a href="#features" className="text-gray-600 hover:text-nutridash-purple transition-colors">Recursos</a>
+            <a href="#pricing" className="text-gray-600 hover:text-nutridash-purple transition-colors">Planos</a>
+            <a href="#testimonials" className="text-gray-600 hover:text-nutridash-purple transition-colors">Depoimentos</a>
 
             <Link href="/login">
-              <Button
-                variant="outline"
-                className="border-nutridash-purple text-nutridash-purple hover:bg-nutridash-purple hover:text-white bg-transparent"
-              >
+              <Button variant="outline" className="border-nutridash-purple text-nutridash-purple hover:bg-nutridash-purple hover:text-white bg-transparent">
                 Entrar
               </Button>
             </Link>
 
             <Link href="/cadastro">
-              <Button className="bg-nutridash-purple hover:bg-nutridash-blue text-white">
-                Começar grátis
-              </Button>
+              <Button className="bg-nutridash-purple hover:bg-nutridash-blue text-white">Começar grátis</Button>
             </Link>
           </nav>
 
@@ -72,8 +58,7 @@ export default function NutriDashLanding() {
           </h1>
 
           <p className="text-xl text-gray-600 mb-8 text-pretty max-w-2xl mx-auto">
-            Centralize o atendimento, automatize planos alimentares e acompanhe resultados em um painel criado por
-            nutricionistas, para nutricionistas.
+            Centralize o atendimento, automatize planos alimentares e acompanhe resultados em um painel criado por nutricionistas, para nutricionistas.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -181,11 +166,7 @@ export default function NutriDashLanding() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             <Card className="border-0 shadow-lg overflow-hidden">
               <div className="aspect-[4/3] bg-gradient-to-br from-nutridash-purple to-nutridash-blue p-8 flex items-center justify-center">
-                <img
-                  src="/img_1.jpg"
-                  alt="Painel do NutriDash"
-                  className="w-full h-full object-cover rounded-lg shadow-lg"
-                />
+                <img src="/img_1.jpg" alt="Painel do NutriDash" className="w-full h-full object-cover rounded-lg shadow-lg" />
               </div>
               <CardContent className="p-6">
                 <h3 className="font-semibold text-lg mb-2">Painel do Paciente</h3>
@@ -195,11 +176,7 @@ export default function NutriDashLanding() {
 
             <Card className="border-0 shadow-lg overflow-hidden">
               <div className="aspect-[4/3] bg-gradient-to-br from-nutridash-blue to-nutridash-purple p-8 flex items-center justify-center">
-                <img
-                  src="/img_3.jpg"
-                  alt="Interface de planejamento de refeições"
-                  className="w-full h-full object-cover rounded-lg shadow-lg"
-                />
+                <img src="/img_3.jpg" alt="Interface de planejamento de refeições" className="w-full h-full object-cover rounded-lg shadow-lg" />
               </div>
               <CardContent className="p-6">
                 <h3 className="font-semibold text-lg mb-2">Planejamento de Refeições</h3>
@@ -209,11 +186,7 @@ export default function NutriDashLanding() {
 
             <Card className="border-0 shadow-lg overflow-hidden">
               <div className="aspect-[4/3] bg-gradient-to-br from-nutridash-purple to-nutridash-blue p-8 flex items-center justify-center">
-                <img
-                  src="/img_2.jpg"
-                  alt="App mobile do paciente"
-                  className="w-full h-full object-cover rounded-lg shadow-lg"
-                />
+                <img src="/img_2.jpg" alt="App mobile do paciente" className="w-full h-full object-cover rounded-lg shadow-lg" />
               </div>
               <CardContent className="p-6">
                 <h3 className="font-semibold text-lg mb-2">Aplicativo Mobile</h3>
@@ -318,30 +291,13 @@ export default function NutriDashLanding() {
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Profissionais confiam no NutriDash</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Veja o que nutricionistas estão dizendo
-            </p>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">Veja o que nutricionistas estão dizendo</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <Testimonial
-              quote="O NutriDash transformou meu dia a dia. Ganhei horas toda semana e os pacientes estão mais engajados."
-              name="Sarah Martinez, RD"
-              role="Nutricionista Clínica"
-              initials="SM"
-            />
-            <Testimonial
-              quote="Os gráficos e relatórios elevaram meu acompanhamento. Os resultados melhoraram muito."
-              name="Dr. James Wilson"
-              role="Nutrição Esportiva"
-              initials="DJ"
-            />
-            <Testimonial
-              quote="Como gestora, as automações fazem toda a diferença. Recomendo demais!"
-              name="Lisa Chen, MS, RD"
-              role="Gestora de Clínica"
-              initials="LC"
-            />
+            <Testimonial quote="O NutriDash transformou meu dia a dia. Ganhei horas toda semana e os pacientes estão mais engajados." name="Sarah Martinez, RD" role="Nutricionista Clínica" initials="SM" />
+            <Testimonial quote="Os gráficos e relatórios elevaram meu acompanhamento. Os resultados melhoraram muito." name="Dr. James Wilson" role="Nutrição Esportiva" initials="DJ" />
+            <Testimonial quote="Como gestora, as automações fazem toda a diferença. Recomendo demais!" name="Lisa Chen, MS, RD" role="Gestora de Clínica" initials="LC" />
           </div>
         </div>
       </section>
@@ -350,21 +306,13 @@ export default function NutriDashLanding() {
       <section className="py-20 px-4 bg-gradient-to-r from-nutridash-purple to-nutridash-blue">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Pronto para transformar seu consultório?</h2>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-            Junte-se a profissionais que já usam o NutriDash para simplificar processos e melhorar resultados.
-          </p>
+          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">Junte-se a profissionais que já usam o NutriDash para simplificar processos e melhorar resultados.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/cadastro">
-              <Button size="lg" className="bg-white text-nutridash-purple hover:bg-gray-100 px-8 py-3 text-lg">
-                Começar grátis
-              </Button>
+              <Button size="lg" className="bg-white text-nutridash-purple hover:bg-gray-100 px-8 py-3 text-lg">Começar grátis</Button>
             </Link>
             <a href="#features">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white text-white hover:bg-white hover:text-nutridash-purple px-8 py-3 text-lg bg-transparent"
-              >
+              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-nutridash-purple px-8 py-3 text-lg bg-transparent">
                 Ver recursos
               </Button>
             </a>
@@ -426,7 +374,7 @@ export default function NutriDashLanding() {
   );
 }
 
-/** Helpers */
+/* Auxiliares */
 function Feature({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center space-x-3">
