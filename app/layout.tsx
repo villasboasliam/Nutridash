@@ -1,23 +1,43 @@
-import "@/app/globals.css";
+// app/layout.tsx
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
 import { Inter } from "next/font/google";
-import dynamic from "next/dynamic";
+import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
-// carrega Providers no client, sem SSR (evita executar Firebase no build)
-const Providers = dynamic(() => import("./providers").then(m => m.Providers), { ssr: false });
-
-export const viewport = { width: "device-width", initialScale: 1 };
-export const metadata = {
-  title: "NutriDash",
+export const metadata: Metadata = {
+  title: { default: "NutriDash", template: "%s · NutriDash" },
   description: "Dashboard para nutricionistas",
-  generator: "v0.dev",
+  applicationName: "NutriDash",
+  robots: { index: true, follow: true },
+  icons: { icon: "/favicon.ico", apple: "/apple-touch-icon.png" },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body
+        className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}
+      >
+        {/* Tudo que precisa rodar no client (ThemeProvider, Toaster, i18n, etc.) fica dentro do Providers */}
         <Providers>{children}</Providers>
       </body>
     </html>
