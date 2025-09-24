@@ -1,17 +1,15 @@
+// app/(marketing)/page.tsx
 import Link from "next/link";
-import ClientAuthRedirect from "./_ClientAuthRedirect";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Clock, Users, BarChart3, Smartphone, Star, Menu } from "lucide-react";
-
-export const dynamic = "force-static";
+import ClientAuthRedirect from "@/components/client-auth-redirect";
 
 export default function NutriDashLanding() {
   return (
     <div className="min-h-screen bg-white">
-      {/* redireciona logado no client */}
+      {/* Redirect se já estiver logado */}
       <ClientAuthRedirect />
 
       {/* Header */}
@@ -36,7 +34,9 @@ export default function NutriDashLanding() {
             </Link>
 
             <Link href="/cadastro">
-              <Button className="bg-nutridash-purple hover:bg-nutridash-blue text-white">Começar grátis</Button>
+              <Button className="bg-nutridash-purple hover:bg-nutridash-blue text-white">
+                Começar grátis
+              </Button>
             </Link>
           </nav>
 
@@ -58,7 +58,8 @@ export default function NutriDashLanding() {
           </h1>
 
           <p className="text-xl text-gray-600 mb-8 text-pretty max-w-2xl mx-auto">
-            Centralize o atendimento, automatize planos alimentares e acompanhe resultados em um painel criado por nutricionistas, para nutricionistas.
+            Centralize o atendimento, automatize planos alimentares e acompanhe resultados em um painel criado por
+            nutricionistas, para nutricionistas.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -237,7 +238,6 @@ export default function NutriDashLanding() {
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
                 <Badge className="bg-gray-800 text-white px-4 py-1">Em breve</Badge>
               </div>
-
               <CardHeader className="text-center pb-8">
                 <CardTitle className="text-2xl mb-2">Profissional</CardTitle>
                 <div className="text-4xl font-bold text-nutridash-purple mb-2">
@@ -263,7 +263,6 @@ export default function NutriDashLanding() {
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
                 <Badge className="bg-gray-800 text-white px-4 py-1">Em breve</Badge>
               </div>
-
               <CardHeader className="text-center pb-8">
                 <CardTitle className="text-2xl mb-2">Premium</CardTitle>
                 <div className="text-4xl font-bold text-gray-900 mb-2">
@@ -306,10 +305,14 @@ export default function NutriDashLanding() {
       <section className="py-20 px-4 bg-gradient-to-r from-nutridash-purple to-nutridash-blue">
         <div className="container mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Pronto para transformar seu consultório?</h2>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">Junte-se a profissionais que já usam o NutriDash para simplificar processos e melhorar resultados.</p>
+          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+            Junte-se a profissionais que já usam o NutriDash para simplificar processos e melhorar resultados.
+          </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/cadastro">
-              <Button size="lg" className="bg-white text-nutridash-purple hover:bg-gray-100 px-8 py-3 text-lg">Começar grátis</Button>
+              <Button size="lg" className="bg-white text-nutridash-purple hover:bg-gray-100 px-8 py-3 text-lg">
+                Começar grátis
+              </Button>
             </Link>
             <a href="#features">
               <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-nutridash-purple px-8 py-3 text-lg bg-transparent">
@@ -374,7 +377,7 @@ export default function NutriDashLanding() {
   );
 }
 
-/* Auxiliares */
+/** Auxiliares simples */
 function Feature({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center space-x-3">
