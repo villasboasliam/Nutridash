@@ -1,13 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { FileText, Home, LineChart, Menu, Search, Users } from "lucide-react"
+import { FileText, Home, LineChart, Menu, Search, Users, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
+} from "@/components/ui/sheet"
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useLanguage } from "@/contexts/language-context"
@@ -106,10 +113,14 @@ useEffect(() => {
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-64 flex-col bg-[hsl(var(--sidebar-background))] text-[hsl(var(--sidebar-foreground))] border-r border-[hsl(var(--sidebar-border))] lg:flex fixed h-full">
         <div className="flex h-14 items-center border-b px-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-            <LineChart className="h-5 w-5" />
-            <span>NutriDash</span>
-          </Link>
+          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+  <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+    <BarChart3 className="h-5 w-5 text-white" />
+  </div>
+  {/* ⬇️ preto no claro, branco no escuro */}
+  <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
+</Link>
+
         </div>
         <nav className="flex-1 space-y-1 p-2">
           <SidebarLinks pathname={pathname} t={t} />
@@ -119,23 +130,34 @@ useEffect(() => {
       <div className="lg:ml-64 flex-1 flex flex-col">
         <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
           <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="lg:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="flex h-14 items-center border-b px-4">
-                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                  <LineChart className="h-5 w-5" />
-                  <span>NutriDash</span>
-                </Link>
-              </div>
-              <nav className="flex-1 space-y-1 p-2">
-                <SidebarLinks pathname={pathname} t={t} />
-              </nav>
-            </SheetContent>
-          </Sheet>
+  <SheetTrigger asChild>
+    <Button variant="outline" size="icon" className="lg:hidden">
+      <Menu className="h-5 w-5" />
+    </Button>
+  </SheetTrigger>
+
+  <SheetContent side="left" className="w-64 p-0">
+    {/* Título acessível (invisível visualmente) para o Radix */}
+    <SheetHeader className="sr-only">
+      <SheetTitle>Menu de navegação</SheetTitle>
+    </SheetHeader>
+
+    <div className="flex h-14 items-center border-b px-4">
+      <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+        <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+          <BarChart3 className="h-5 w-5 text-white" />
+        </div>
+        {/* preto no claro, branco no escuro */}
+        <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
+      </Link>
+    </div>
+
+    <nav className="flex-1 space-y-1 p-2">
+      <SidebarLinks pathname={pathname} t={t} />
+    </nav>
+  </SheetContent>
+</Sheet>
+
 
           <div className="w-full flex-1">
             <form onSubmit={(e) => e.preventDefault()}>
