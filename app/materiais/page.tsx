@@ -2,14 +2,21 @@
 
 import { getAuth } from "firebase/auth";
 import { useState, useEffect } from "react"
-import { FileText, Home, LineChart, Menu, Plus, Upload, Users, Video, X, Trash2, Edit } from "lucide-react";
+import { FileText, Home, LineChart, Menu, Plus, Upload, Users, Video, X, Trash2, Edit, BarChart3 } from "lucide-react";
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
+} from "@/components/ui/sheet"
+
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuthState } from "react-firebase-hooks/auth"
@@ -583,10 +590,14 @@ const handleSendMaterial = async () => {
             {/* Sidebar para desktop */}
             <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex">
                 <div className="flex h-14 items-center border-b px-4">
-                    <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                        <LineChart className="h-5 w-5" />
-                        <span>NutriDash</span>
-                    </Link>
+                    <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+  <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+    <BarChart3 className="h-5 w-5 text-white" />
+  </div>
+  {/* ⬇️ preto no claro, branco no escuro */}
+  <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
+</Link>
+
                 </div>
                 <nav className="flex-1 space-y-1 p-2">
                     <SidebarItem href="/" label="Dashboard" icon={<Home className="h-4 w-4" />} pathname={pathname} />
@@ -600,28 +611,39 @@ const handleSendMaterial = async () => {
             {/* Conteúdo principal */}
             <div className="flex flex-1 flex-col">
                 <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline" size="icon" className="lg:hidden">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="w-64 p-0">
-                            <div className="flex h-14 items-center border-b px-4">
-                                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                                    <LineChart className="h-5 w-5" />
-                                    <span>NutriDash</span>
-                                </Link>
-                            </div>
-                            <nav className="flex-1 space-y-1 p-2">
-                                <SidebarItem href="/" label="Dashboard" icon={<Home className="h-4 w-4" />} pathname={pathname} />
-                                <SidebarItem href="/pacientes" label="Pacientes" icon={<Users className="h-4 w-4" />} pathname={pathname} />
-                                <SidebarItem href="/materiais" label="Materiais" icon={<FileText className="h-4 w-4" />} pathname={pathname} />
-                                <SidebarItem href="/financeiro" label="Financeiro" icon={<LineChart className="h-4 w-4" />} pathname={pathname} />
-                                <SidebarItem href="/perfil" label="Perfil" icon={<Users className="h-4 w-4" />} pathname={pathname} />
-                            </nav>
-                        </SheetContent>
-                    </Sheet>
+                   <Sheet>
+  <SheetTrigger asChild>
+    <Button variant="outline" size="icon" className="lg:hidden">
+      <Menu className="h-5 w-5" />
+    </Button>
+  </SheetTrigger>
+
+  <SheetContent side="left" className="w-64 p-0">
+    {/* título acessível exigido pelo Radix (invisível visualmente) */}
+    <SheetHeader className="sr-only">
+      <SheetTitle>Menu de navegação</SheetTitle>
+    </SheetHeader>
+
+    <div className="flex h-14 items-center border-b px-4">
+      <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+        <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+          <BarChart3 className="h-5 w-5 text-white" />
+        </div>
+        {/* preto no claro, branco no escuro */}
+        <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
+      </Link>
+    </div>
+
+    <nav className="flex-1 space-y-1 p-2">
+      <SidebarItem href="/" label="Dashboard" icon={<Home className="h-4 w-4" />} pathname={pathname} />
+      <SidebarItem href="/pacientes" label="Pacientes" icon={<Users className="h-4 w-4" />} pathname={pathname} />
+      <SidebarItem href="/materiais" label="Materiais" icon={<FileText className="h-4 w-4" />} pathname={pathname} />
+      <SidebarItem href="/financeiro" label="Financeiro" icon={<LineChart className="h-4 w-4" />} pathname={pathname} />
+      <SidebarItem href="/perfil" label="Perfil" icon={<Users className="h-4 w-4" />} pathname={pathname} />
+    </nav>
+  </SheetContent>
+</Sheet>
+
                     <div className="w-full flex-1">
                         <h2 className="text-lg font-medium">Materiais</h2>
                     </div>
