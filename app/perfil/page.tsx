@@ -1,10 +1,9 @@
 "use client"
 
 import { useToast } from "@/components/ui/use-toast"
-import { Sheet } from "@/components/ui/sheet"
 import {
     FileText, Home, LineChart, Menu, Save, Users, Video, LogOut, KeyRound,
-    Star, Circle, FlaskConical
+    Star, Circle, FlaskConical, BarChart3
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -23,7 +22,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SheetContent, SheetTrigger } from "@/components/ui/sheet"
+// garanta este import:
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -142,19 +149,17 @@ export default function PerfilPage() {
         }
     }
 
-    // O restante do JSX permanece inalterado (não mostrado aqui para economia de espaço)
-
-
-
-
     return (
         <div className="flex min-h-screen bg-background">
             {/* Sidebar para desktop */}
             <aside className="hidden w-64 flex-col bg-card border-r border-border lg:flex fixed h-full">
                 <div className="flex h-14 items-center border-b px-4">
-                    <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                        <LineChart className="h-5 w-5" />
-                        <span>NutriDash</span>
+                    {/* LOGO igual à landing (claro/escuro) */}
+                    <Link href="/" className="flex items-center gap-2 font-semibold">
+                        <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+                            <BarChart3 className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
                     </Link>
                 </div>
                 <nav className="flex-1 space-y-1 p-2">
@@ -170,27 +175,38 @@ export default function PerfilPage() {
             <div className="flex flex-col flex-1 lg:ml-64">
                 <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:px-6">
                     <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline" size="icon" className="lg:hidden">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="w-64 p-0">
-                            <div className="flex h-14 items-center border-b px-4">
-                                <Link href="/" className="flex items-center gap-2 font-semibold text-indigo-600">
-                                    <LineChart className="h-5 w-5" />
-                                    <span>NutriDash</span>
-                                </Link>
-                            </div>
-                            <nav className="flex-1 space-y-1 p-2">
-                                <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
-                                <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
-                                <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
-                                <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
-                                <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
-                            </nav>
-                        </SheetContent>
-                    </Sheet>
+  <SheetTrigger asChild>
+    <Button variant="outline" size="icon" className="lg:hidden">
+      <Menu className="h-5 w-5" />
+    </Button>
+  </SheetTrigger>
+
+  <SheetContent side="left" className="w-64 p-0">
+    {/* título acessível exigido pelo Radix (invisível visualmente) */}
+    <SheetHeader className="sr-only">
+      <SheetTitle>Menu de navegação</SheetTitle>
+    </SheetHeader>
+
+    <div className="flex h-14 items-center border-b px-4">
+      {/* LOGO igual à landing (claro/escuro) */}
+      <Link href="/" className="flex items-center gap-2 font-semibold">
+        <div className="w-8 h-8 bg-nutridash-purple rounded-lg flex items-center justify-center">
+          <BarChart3 className="h-5 w-5 text-white" />
+        </div>
+        <span className="text-xl font-bold text-gray-900 dark:text-white">NutriDash</span>
+      </Link>
+    </div>
+
+    <nav className="flex-1 space-y-1 p-2">
+      <SidebarItem href="/" icon={<Home className="h-4 w-4" />} label={t("dashboard")} pathname={pathname} />
+      <SidebarItem href="/pacientes" icon={<Users className="h-4 w-4" />} label={t("patients")} pathname={pathname} />
+      <SidebarItem href="/materiais" icon={<FileText className="h-4 w-4" />} label="Materiais" pathname={pathname} />
+      <SidebarItem href="/financeiro" icon={<LineChart className="h-4 w-4" />} label="Financeiro" pathname={pathname} />
+      <SidebarItem href="/perfil" icon={<Users className="h-4 w-4" />} label={t("profile")} pathname={pathname} />
+    </nav>
+  </SheetContent>
+</Sheet>
+
                     <div className="w-full flex-1">
                         <h2 className="text-lg font-medium">Perfil</h2>
                     </div>
@@ -201,7 +217,7 @@ export default function PerfilPage() {
                     <div className="flex flex-col gap-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {/* Card Informações Pessoais */}
-                            <Card className="rounded-xl border"> {/* Removida a sombra */}
+                            <Card className="rounded-xl border">
                                 <CardHeader className="pb-4">
                                     <CardTitle className="text-2xl font-bold text-primary">Informações Pessoais</CardTitle>
                                 </CardHeader>
@@ -265,7 +281,7 @@ export default function PerfilPage() {
                             </Card>
 
                             {/* Card Endereço */}
-                            <Card className="rounded-xl border"> {/* Removida a sombra */}
+                            <Card className="rounded-xl border">
                                 <CardHeader className="pb-4">
                                     <CardTitle className="text-2xl font-bold text-primary">Endereço</CardTitle>
                                 </CardHeader>
@@ -306,12 +322,12 @@ export default function PerfilPage() {
                             </Card>
 
                             {/* Card Configurações */}
-                            <Card className="rounded-xl border"> {/* Removida a sombra */}
+                            <Card className="rounded-xl border">
                                 <CardHeader className="pb-4">
                                     <CardTitle className="text-2xl font-bold text-primary">Configurações</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-5">
-                                            {/* Exibição do plano - AGORA COM BADGE E ÍCONES LUCIDE-REACT */}
+                                    {/* Plano atual */}
                                     <div className="grid gap-2">
                                         <Label className="text-sm font-medium text-muted-foreground">Plano Atual</Label>
                                         <Badge
@@ -336,7 +352,8 @@ export default function PerfilPage() {
                                             <span>{formData.plano === "premium" ? "Premium" : formData.plano === "gratuito" ? "Gratuito" : formData.plano === "teste" ? "Teste" : formData.plano || "Desconhecido"}</span>
                                         </Badge>
                                     </div>
-                                    {/* Botão de alterar senha */}
+
+                                    {/* Alterar senha */}
                                     <div className="grid gap-2">
                                         <Label htmlFor="alterar-senha" className="text-sm font-medium text-muted-foreground">
                                             Alterar Senha
@@ -352,7 +369,7 @@ export default function PerfilPage() {
                                         </Link>
                                     </div>
 
-                                    {/* Campo valor da consulta */}
+                                    {/* Valor da consulta */}
                                     <div className="grid gap-2">
                                         <Label htmlFor="valorConsulta" className="text-sm font-medium text-muted-foreground">Valor Consulta Padrão (R$)</Label>
                                         <Input
@@ -363,28 +380,27 @@ export default function PerfilPage() {
                                             className="rounded-md border border-input bg-background px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                                         />
                                     </div>
-
-                                    
-
                                 </CardContent>
-
-
                             </Card>
                         </div>
 
-
-                        {/* Botões de ação */}
+                        {/* Botões de ação — elegantes/minimalistas */}
                         <div className="flex flex-col sm:flex-row gap-4 mt-6">
                             <Button
                                 onClick={handleSave}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-6 rounded-lg text-base font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+                                variant="outline"
+                                className="py-2 px-6 rounded-lg text-base font-medium border-gray-200 text-gray-900 hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900 transition-colors"
                                 disabled={isSaving}
                             >
                                 <Save className={`mr-2 h-4 w-4 ${isSaving ? 'animate-spin' : ''}`} /> {saveButtonText}
                             </Button>
+
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" className="py-2 px-6 rounded-lg text-base font-semibold shadow-md hover:shadow-lg transition-all duration-200">
+                                    <Button
+                                        variant="ghost"
+                                        className="py-2 px-6 rounded-lg text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-900 transition-colors"
+                                    >
                                         <LogOut className="mr-2 h-4 w-4" /> {t("logout")}
                                     </Button>
                                 </AlertDialogTrigger>
@@ -396,16 +412,17 @@ export default function PerfilPage() {
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                        <AlertDialogCancel className="rounded-md">Cancelar</AlertDialogCancel>
+                                        <AlertDialogCancel className="rounded-md">
+                                            Cancelar
+                                        </AlertDialogCancel>
                                         <AlertDialogAction
                                             onClick={() => {
                                                 signOut(auth).then(() => router.push("/login"))
                                             }}
-                                            className="bg-destructive hover:bg-destructive/90 text-white rounded-md"
+                                            className="rounded-md border border-gray-200 bg-transparent text-gray-900 hover:bg-gray-50 dark:border-gray-800 dark:text-white dark:hover:bg-gray-900"
                                         >
                                             Sair
                                         </AlertDialogAction>
-
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
